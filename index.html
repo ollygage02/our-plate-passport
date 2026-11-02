@@ -428,6 +428,11 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
+.uc-hero{display:flex;align-items:center;gap:12px}
+.uc-hero .flag{font-size:34px;line-height:1}
+.uc-hero h2{font-size:20px;font-weight:800}
+.uc-hero p{color:var(--muted);font-size:14px}
+.d-row.static .todo{color:var(--muted);font-weight:500}
 .mq-wrap{position:relative}
 .sugg{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:7;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden auto;max-height:330px}
 .sugg button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-top:1px solid var(--line);font-size:15px}
@@ -1250,6 +1255,7 @@ function render(){
   else if (r.v === "country"){ title = C[r.id].name; html = viewCountry(r.id); }
   else if (r.v === "dish"){ title = D[r.id].name; html = viewDish(r.id); }
   else if (r.v === "user"){ title = r.id === me ? "Your passport" : nameOf(r.id); html = viewUser(r.id); }
+  else if (r.v === "ucountry"){ title = shortName(r.uid) + " · " + C[r.id].name; html = viewUserCountry(r.uid, r.id); }
   const bar = $("#bar");
   if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>';
   else if (r.v === "feed") bar.innerHTML = '<span class="wordmark"><span class="dot"></span>Our Plate Passport</span>';
@@ -1425,7 +1431,7 @@ function mapHTML(uid){
       mapCache.key = key;
       mapCache.html = '<svg class="world" viewBox="'+(MAP.vb || ('0 0 ' + MAP.w + ' ' + MAP.h))+'" role="img" aria-label="World map with '+n+' countries eaten in"><g>'
         + MAP.shapes.filter(s => s.id !== "AQ" && s.id !== "ATA").map(s => { const st = done.has(s.id) ? "c" : visited.has(s.id) ? "v" : listed.has(s.id) ? "l" : "o";
-            return '<path class="c-'+st+'" d="'+s.d+'" data-cid="'+esc(s.id)+'"'+(listed.has(s.id) ? ' data-act="country" data-id="'+s.id+'" data-v="'+(st === "v" || st === "c" ? 1 : 0)+'" data-done="'+(st === "c" ? 1 : 0)+'"' : '')+'><title>'+esc(s.name)+(st === "c" ? ' · completed' : st === "v" ? ' · eaten here' : listed.has(s.id) ? ' · on the list' : '')+'</title></path>'; }).join("")
+            return '<path class="c-'+st+'" d="'+s.d+'" data-cid="'+esc(s.id)+'"'+(listed.has(s.id) ? ' data-act="'+(uid === me ? 'country' : 'ucountry')+'" data-id="'+s.id+'"'+(uid === me ? '' : ' data-uid="'+esc(uid)+'"')+' data-v="'+(st === "v" || st === "c" ? 1 : 0)+'" data-done="'+(st === "c" ? 1 : 0)+'"' : '')+'><title>'+esc(s.name)+(st === "c" ? ' · completed' : st === "v" ? ' · eaten here' : listed.has(s.id) ? ' · on the list' : '')+'</title></path>'; }).join("")
         + '</g><g class="pins"></g></svg>';
     }
     h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the list" autocomplete="off" aria-label="Find a country on the list" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
@@ -1480,7 +1486,7 @@ function mapResultHTML(uid, id){
   const c = C[id], x = mapNames().find(n => n.id === id); if (!x) return '';
   if (!c) return '<div class="mq-res"><span class="t"><b>'+esc(x.name)+'</b><small>Not on the list yet</small></span></div>';
   const t = triedMap(uid), n = c.dishes.filter(d => t[d.id]).length;
-  return '<div class="mq-res"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'+(n === c.dishes.length ? 'Completed' : n ? n+' of '+c.dishes.length+' must-trys eaten' : 'None of its '+c.dishes.length+' must-trys yet')+'</small></span><button class="btn sm" data-act="country" data-id="'+c.code+'">Open</button></div>';
+  return '<div class="mq-res"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'+(n === c.dishes.length ? 'Completed' : n ? n+' of '+c.dishes.length+' must-trys eaten' : 'None of its '+c.dishes.length+' must-trys yet')+'</small></span><button class="btn sm" data-act="'+(uid === me ? 'country' : 'ucountry')+'" data-id="'+c.code+'"'+(uid === me ? '' : ' data-uid="'+esc(uid)+'"')+'>Open</button></div>';
 }
 function mapMatches(q){
   q = q.trim().toLowerCase(); if (!q) return [];
@@ -1593,7 +1599,7 @@ function viewUser(uid){
       const order = []; ms.forEach(m => { if (C[m.country] && !order.includes(m.country)) order.push(m.country); });   /* most recent first */
       h += order.map(code => {
         const c = C[code], cms = ms.filter(m => m.country === code), n = c.dishes.filter(d => st.tried[d.id]).length, done = n === c.dishes.length;
-        return '<section class="cc"><button class="cc-h" data-act="country" data-id="'+code+'"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'
+        return '<section class="cc"><button class="cc-h" data-act="'+(isMe ? 'country' : 'ucountry')+'" data-id="'+code+'"'+(isMe ? '' : ' data-uid="'+esc(uid)+'"')+'><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'
           + (done ? '<span class="cc-done">Completed</span> · ' : n+' of '+c.dishes.length+' must-trys · ')+cms.length+' meal'+(cms.length === 1 ? '' : 's')+'</small></span><span class="chev" aria-hidden="true">›</span></button>'
           + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span>'
           + '<div class="strip">'+cms.map(m => '<button class="sthumb" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+(m.dish && D[m.dish] ? '' : '<span class="off-tag">Off list</span>')+'</button>').join("")+'</div></section>';
@@ -1609,6 +1615,24 @@ function viewUser(uid){
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
   if (isMe) h += membersHTML() + '<p style="text-align:center;margin-top:8px"><button class="btn" data-act="sign-out">Sign out</button></p>';
+  return h + '</div>';
+}
+
+/* A friend's progress in one country: view only, nothing to log from here. */
+function viewUserCountry(uid, code){
+  const c = C[code], t = triedMap(uid), n = c.dishes.filter(d => t[d.id]).length, done = n === c.dishes.length;
+  const ms = mealsOf(uid).filter(m => m.country === code);
+  let h = '<div class="stack"><div class="hero"><div class="uc-hero">'+avatar(uid, "lg")+'<div><h2>'+c.flag+' '+esc(c.name)+'</h2><p>'+esc(nameOf(uid))+(done ? ' has completed '+esc(c.name)+'.' : ' has had <span class="mono">'+n+' of '+c.dishes.length+'</span> must-trys.')+'</p></div></div>'
+    + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span></div>';
+  h += '<div class="section-h"><h2>Must-try list</h2><span>'+n+'/'+c.dishes.length+'</span></div><div class="d-list">'
+    + c.dishes.map(d => { const when = t[d.id], dm = ms.filter(m => m.dish === d.id), best = dm.reduce((a, m) => Math.max(a, +m.rating || 0), 0);
+        return '<div class="d-row static"><span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'
+          + (when ? (isDrink(d.id) ? 'Drunk ' : 'Eaten ')+fmtDate(when)+(best ? ' · '+best.toFixed(1)+' ★' : '')+(dm.length > 1 ? ' · '+dm.length+' times' : '') : 'Not yet')+'</small></span>'
+          + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+'</div>'; }).join("")
+    + '</div>';
+  h += '<div class="section-h"><h2>Photos</h2><span>'+ms.length+'</span></div>';
+  h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
+    : '<p class="hint">No photos from '+esc(c.name)+' yet.</p>';
   return h + '</div>';
 }
 
@@ -1780,6 +1804,7 @@ document.addEventListener("click", e => {
     case "country": closeSheet(); go({v:"country", id}); break;
     case "dish": closeSheet(); go({v:"dish", id}); break;
     case "user": closeSheet(); go({v:"user", id}); break;
+    case "ucountry": closeSheet(); if (t.dataset.uid && t.dataset.uid !== me && C[id]) go({v:"ucountry", id, uid:t.dataset.uid}); else go({v:"country", id}); break;
     case "ctab": cur().tab = id; render(); break;
     case "pview": cur().pview = id; render(); break;
     case "mz": if (mapCtl) mapCtl.button(id); break;
