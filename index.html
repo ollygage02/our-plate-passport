@@ -814,6 +814,48 @@ const COUNTRIES = [
   ["harira","Harira","🥣","Tomato, lentil and chickpea soup, the dish that breaks the fast in Ramadan."],
   ["minttea","Mint tea","🍵","Green tea with fresh mint and plenty of sugar, poured from a height."],
   ["msemen","Msemen","🫓","Square, flaky pan-fried flatbread with honey or butter at breakfast."]]],
+ ["GT","Guatemala","🇬🇹",[
+  ["pepian","Pepián","🍲","The national dish: chicken or beef stewed in a thick sauce of roasted chillies, tomatoes and toasted seeds."],
+  ["kakik","Kak'ik","🦃","Spicy red turkey soup from the Q'eqchi' Maya, scented with coriander and chillies.","Cobán"],
+  ["jocon","Jocón","🥘","Chicken in a bright green sauce of tomatillos, coriander and spring onion."],
+  ["chuchitos","Chuchitos","🫔","Small, firm corn tamales filled with meat and tomato sauce, wrapped in corn husk."],
+  ["rellenitos","Rellenitos","🍌","Mashed plantain stuffed with sweet black beans and chocolate, fried and sugared."]]],
+ ["BZ","Belize","🇧🇿",[
+  ["riceandbeans","Rice and beans with stew chicken","🍛","Rice cooked with red kidney beans and coconut milk, served with dark, recado-spiced chicken."],
+  ["hudut","Hudut","🐟","Fish simmered in coconut broth, eaten with mashed green and ripe plantain.","Garifuna"],
+  ["fryjacks","Fry jacks","🥟","Puffy fried dough pockets for breakfast, with beans, eggs or honey."],
+  ["salbutes","Salbutes","🌮","Puffed fried corn tortillas piled with shredded chicken, cabbage and pickled onion."],
+  ["boilup","Boil up","🍲","Boiled fish, cassava, plantain, sweet potato and eggs under a tomato sauce.","Kriol"]]],
+ ["HN","Honduras","🇭🇳",[
+  ["baleada","Baleada","🌯","A thick flour tortilla folded over refried beans, crumbly cheese and sour cream.","North coast"],
+  ["sopacaracol","Sopa de caracol","🐚","Conch soup in coconut milk with plantain and cassava.","North coast"],
+  ["platotipico","Plato típico","🍽️","Grilled beef with beans, fried plantain, cheese, cream and chismol salsa."],
+  ["yucachicharron","Yuca con chicharrón","🥔","Boiled cassava topped with crispy pork and tangy cabbage salad."],
+  ["pastelitos","Pastelitos de carne","🥟","Crisp fried corn turnovers filled with meat and rice, under pickled cabbage."]]],
+ ["SV","El Salvador","🇸🇻",[
+  ["pupusas","Pupusas","🫓","Thick corn tortillas stuffed with cheese, beans or pork, eaten with curtido and tomato salsa."],
+  ["yucafrita","Yuca frita","🍟","Fried cassava with curtido, salsa and crunchy pork or tiny fried fish."],
+  ["panesconpollo","Panes con pollo","🥪","A soft roll filled with chicken stewed in a spiced tomato sauce, with watercress and cucumber."],
+  ["atol","Atol de elote","🌽","A warm, sweet, thick drink made from fresh corn and cinnamon."],
+  ["quesadilla","Quesadilla salvadoreña","🍰","Not a tortilla: a sweet, cheesy pound cake topped with sesame seeds, eaten with coffee."]]],
+ ["NI","Nicaragua","🇳🇮",[
+  ["gallopinto","Gallo pinto","🍛","Rice and red beans fried together, eaten at almost every meal."],
+  ["vigoron","Vigorón","🥗","Boiled cassava, crispy pork rind and cabbage salad served on a banana leaf.","Granada"],
+  ["nacatamal","Nacatamal","🫔","A big tamale of corn dough, pork, rice and potato steamed in banana leaf, a weekend breakfast."],
+  ["indioviejo","Indio viejo","🍲","Shredded beef stewed with corn dough, sour orange and mint."],
+  ["quesillo","Quesillo","🧀","A warm tortilla wrapped round stretchy soft cheese, pickled onion and cream.","Nagarote"]]],
+ ["CR","Costa Rica","🇨🇷",[
+  ["gallopinto","Gallo pinto","🍳","Rice and black beans with Salsa Lizano, served with eggs and natilla at breakfast."],
+  ["casado","Casado","🍽️","The everyday lunch plate: rice, beans, plantain, salad and fish, chicken or steak."],
+  ["chifrijo","Chifrijo","🥣","A bar snack of rice, beans, crispy pork and pico de gallo, with tortilla chips."],
+  ["olladecarne","Olla de carne","🍲","Beef soup with chunks of cassava, corn, chayote and plantain."],
+  ["caribbeanrice","Rice and beans (Caribbean)","🥥","Rice and red beans cooked in coconut milk, with spicy chicken.","Limón"]]],
+ ["PA","Panama","🇵🇦",[
+  ["sancocho","Sancocho","🍲","The national dish: chicken soup with yam and culantro, with rice on the side."],
+  ["carimanolas","Carimañolas","🥟","Cassava fritters stuffed with seasoned minced beef."],
+  ["patacones","Patacones","🍌","Twice-fried flattened green plantain, the side to almost everything."],
+  ["ceviche","Ceviche de corvina","🐟","Sea bass cured in lime with onion and chilli, sold by the cup at the fish market.","Panama City"],
+  ["ropavieja","Ropa vieja","🥩","Shredded beef stewed with peppers, onion and tomato, with rice and plantain."]]],
  ["ZA","South Africa","🇿🇦",[
   ["braai","Braai","🔥","The South African barbecue: boerewors, chops and sosaties over wood coals."],
   ["bunnychow","Bunny chow","🍞","A hollowed-out loaf filled with curry.","Durban"],
@@ -824,12 +866,13 @@ const COUNTRIES = [
 ].forEach(([code,name,flag,ds]) => COUNTRIES.push({code, name, flag, dishes:ds.map(([slug,dn,emoji,desc,region]) => ({id:code.toLowerCase()+"-"+slug, name:dn, emoji, desc, country:code, region}))}));
 COUNTRIES.sort((a,b) => a.name.localeCompare(b.name));
 const CONTINENT = c => ["JP","TH","VN","IN"].includes(c) ? "Asia" : ["US","CA","MX"].includes(c) ? "North America"
+  : ["GT","BZ","HN","SV","NI","CR","PA"].includes(c) ? "Central America"
   : ["AR","BR","PE","CL","CO","UY","EC","BO","VE"].includes(c) ? "South America"
   : ["MA","ZA"].includes(c) ? "Africa" : ["AU"].includes(c) ? "Oceania" : "Europe";
-const CONTINENTS = ["Europe","North America","South America","Asia","Africa","Oceania"];
+const CONTINENTS = ["Europe","North America","Central America","South America","Asia","Africa","Oceania"];
 const C = {}, D = {};
 /* drinks on the must-try lists get "drunk" wording instead of "eaten" */
-const DRINKS = new Set(["de-kolsch","pe-pisco","uy-mate","ma-minttea","vn-eggcoffee"]);
+const DRINKS = new Set(["de-kolsch","pe-pisco","uy-mate","ma-minttea","vn-eggcoffee","sv-atol"]);
 const isDrink = id => DRINKS.has(id);
 COUNTRIES.forEach(c => { C[c.code] = c; c.dishes.forEach(d => D[d.id] = d); });
 [["kaviar","Kölscher Kaviar","🧅","Not caviar at all: Flönz (blood sausage) on a rye roll with raw onion and mustard.","Cologne"],
@@ -1661,7 +1704,8 @@ const RATING_WORDS = ["", "Not for me", "It was okay", "Good", "Really good", "U
 const CRITERIA = [["taste","Taste","Taste"],["look","Presentation","Presentation"],["value","Value for money","Value"]];
 /* prices: optional, in the local currency by default; value for money is only rated once a price is entered */
 const CUR = {GB:"GBP",IE:"EUR",FR:"EUR",DE:"EUR",IT:"EUR",ES:"EUR",PT:"EUR",GR:"EUR",NL:"EUR",BE:"EUR",AT:"EUR",HR:"EUR",CH:"CHF",CZ:"CZK",PL:"PLN",HU:"HUF",SE:"SEK",DK:"DKK",
-  JP:"JPY",TH:"THB",VN:"VND",IN:"INR",US:"USD",CA:"CAD",MX:"MXN",AR:"ARS",BR:"BRL",PE:"PEN",CL:"CLP",CO:"COP",UY:"UYU",EC:"USD",BO:"BOB",VE:"VES",AU:"AUD",MA:"MAD",ZA:"ZAR"};
+  JP:"JPY",TH:"THB",VN:"VND",IN:"INR",US:"USD",CA:"CAD",MX:"MXN",AR:"ARS",BR:"BRL",PE:"PEN",CL:"CLP",CO:"COP",UY:"UYU",EC:"USD",BO:"BOB",VE:"VES",AU:"AUD",MA:"MAD",ZA:"ZAR",
+  GT:"GTQ",BZ:"BZD",HN:"HNL",SV:"USD",NI:"NIO",CR:"CRC",PA:"USD"};
 const curOptions = (country, current) => Array.from(new Set([CUR[country] || "EUR", current, "GBP", "EUR", "USD"].filter(Boolean)));
 const hasPrice = () => K && +K.price > 0;
 const effRatings = () => Object.assign({}, K.ratings, hasPrice() ? {} : {value:0});
