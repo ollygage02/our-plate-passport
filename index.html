@@ -1428,7 +1428,7 @@ function mapHTML(uid){
             return '<path class="c-'+st+'" d="'+s.d+'" data-cid="'+esc(s.id)+'"'+(listed.has(s.id) ? ' data-act="country" data-id="'+s.id+'" data-v="'+(st === "v" || st === "c" ? 1 : 0)+'" data-done="'+(st === "c" ? 1 : 0)+'"' : '')+'><title>'+esc(s.name)+(st === "c" ? ' · completed' : st === "v" ? ' · eaten here' : listed.has(s.id) ? ' · on the list' : '')+'</title></path>'; }).join("")
         + '</g><g class="pins"></g></svg>';
     }
-    h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the map" autocomplete="off" aria-label="Find a country on the map" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
+    h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the list" autocomplete="off" aria-label="Find a country on the list" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
       + '<div id="mq-result">'+(mapHl ? mapResultHTML(uid, mapHl) : '')+'</div>';
     h += '<div class="map-box">'+mapCache.html
       + '<div class="map-ctrl"><button data-act="mz" data-id="in" aria-label="Zoom in">+</button><button data-act="mz" data-id="out" aria-label="Zoom out">−</button><button class="mz-reset" data-act="mz" data-id="reset" aria-label="Show the whole map">⤢</button></div></div>'
@@ -1469,9 +1469,11 @@ function mapNames(){
   COUNTRIES.forEach(c => { if (onMap.has(c.code)) names[c.code] = c.name; });
   return (mapNameCache = Object.keys(names).map(id => ({id, name:names[id]})).sort((a,b) => a.name.localeCompare(b.name)));
 }
+/* the search only offers countries that are on the list */
+function listedNames(){ return mapNames().filter(x => C[x.id]); }
 function findOnMap(q, exact){
   q = q.trim().toLowerCase(); if (!q) return null;
-  const L = mapNames();
+  const L = listedNames();
   return L.find(x => x.name.toLowerCase() === q) || (exact ? null : (L.find(x => x.name.toLowerCase().startsWith(q)) || L.find(x => x.name.toLowerCase().includes(q))));
 }
 function mapResultHTML(uid, id){
@@ -1482,7 +1484,7 @@ function mapResultHTML(uid, id){
 }
 function mapMatches(q){
   q = q.trim().toLowerCase(); if (!q) return [];
-  const L = mapNames();
+  const L = listedNames();
   /* match from the start of the name, then from the start of any later word ("kin" finds United Kingdom), never mid-word */
   const wordStart = n => n.toLowerCase().split(/[\s\-'.,()]+/).slice(1).some(w => w.startsWith(q));
   return L.filter(x => x.name.toLowerCase().startsWith(q)).concat(L.filter(x => !x.name.toLowerCase().startsWith(q) && wordStart(x.name))).slice(0, 8);
@@ -1495,7 +1497,7 @@ function renderMapSugg(q){
     if (i < 0){ const re = /[\s\-'.,()]+/g; let m; while ((m = re.exec(nl))){ if (nl.startsWith(ql, m.index + m[0].length)){ i = m.index + m[0].length; break; } } } return i < 0 ? esc(name) : esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + ql.length)) + '</b>' + esc(name.slice(i + ql.length)); };
   box.innerHTML = ms.length ? ms.map(x => { const c = C[x.id], n = c ? c.dishes.filter(d => t[d.id]).length : 0;
       return '<button role="option" data-act="mq-pick" data-id="'+esc(x.id)+'"><span class="fl">'+(c ? c.flag : '·')+'</span><span class="nm">'+bold(x.name)+'</span><small>'+(c ? (n === c.dishes.length ? 'Completed' : n ? n+'/'+c.dishes.length+' eaten' : 'On the list') : 'Not on the list')+'</small></button>'; }).join("")
-    : '<p class="sugg-none">No countries match "'+esc(q.trim())+'"</p>';
+    : '<p class="sugg-none">No countries on the list match "'+esc(q.trim())+'"</p>';
   box.hidden = false;
 }
 function pickOnMap(id){
