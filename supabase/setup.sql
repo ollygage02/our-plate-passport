@@ -133,6 +133,13 @@ create policy "members upload to own folder" on storage.objects for insert to au
 create policy "delete own photos" on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
+-- Helper functions are only for the privacy rules above, not to be called from outside.
+revoke execute on function public.only_members_sign_up() from public, anon, authenticated;
+revoke execute on function public.is_member() from public, anon;
+revoke execute on function public.is_admin() from public, anon;
+grant execute on function public.is_member() to authenticated;
+grant execute on function public.is_admin() to authenticated;
+
 -- You, as the group's first member and admin. Change this to the email you'll sign in with.
 insert into public.members (email, is_admin) values (lower('YOUR-EMAIL@example.com'), true)
 on conflict (email) do update set is_admin = true;
