@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
+<meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1311" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plate Passport">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Our Plate Passport</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+
+/* Layout: one phone-width column, sticky app bar, fixed bottom tab bar; passport pages use ink "stamps" for dishes eaten */
+:root{
+  --bg:#F1F3EF; --surface:#FFFFFF; --fg:#17201B; --muted:#5B6862; --line:#D9E0DA;
+  --accent:#3344C2; --accent-fg:#FFFFFF; --accent-soft:#E6E9F9;
+  --stamp:#A8323F; --ok:#2C7549; --scrim:rgba(10,14,12,.45); --shadow:0 1px 2px rgba(20,30,25,.06),0 4px 16px rgba(20,30,25,.06);
+  --f-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r-sm:8px; --r-md:14px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0F1311; --surface:#181D1A; --fg:#E5EBE7; --muted:#97A39D; --line:#2A322E;
+  --accent:#93A0FF; --accent-fg:#0D1233; --accent-soft:#232A4A;
+  --stamp:#F08391; --ok:#6CCB94; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.3);
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0F1311; --surface:#181D1A; --fg:#E5EBE7; --muted:#97A39D; --line:#2A322E;
+  --accent:#93A0FF; --accent-fg:#0D1233; --accent-soft:#232A4A;
+  --stamp:#F08391; --ok:#6CCB94; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.3);
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+p{margin:0}
+#app{max-width:560px;margin:0 auto;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+
+/* app bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;gap:10px;padding-block:14px 10px;min-height:58px}
+.wordmark{font-family:var(--f-display);font-weight:800;font-size:22px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.wordmark .dot{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--stamp);display:grid;place-items:center}
+.wordmark .dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--stamp)}
+.bar h1{font-size:19px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icon-btn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:none}
+.icon-btn:hover{background:var(--accent-soft)}
+.icon-btn svg{width:22px;height:22px}
+
+/* tab bar */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);padding-inline:16px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding-block:9px 10px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.tab svg{width:23px;height:23px}
+.tab[aria-current="page"]{color:var(--accent)}
+.tab.log span.plus{width:40px;height:30px;border-radius:10px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center}
+.tab.log span.plus svg{width:20px;height:20px}
+.tab.log{color:var(--fg)}
+
+/* generic */
+.stack{display:flex;flex-direction:column;gap:16px}
+.note{font-size:13px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:var(--r-sm);padding:10px 12px}
+.section-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:8px}
+.section-h h2{font-size:18px;font-weight:600}
+.section-h span{font-size:13px;color:var(--muted)}
+.label{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding-inline:16px;border-radius:999px;font-weight:600;font-size:14px;border:1.5px solid var(--line);background:var(--surface)}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.btn svg{width:18px;height:18px}
+.row-btns{display:flex;flex-wrap:wrap;gap:8px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* avatar */
+.av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;background:hsl(var(--h) 45% 42%)}
+.av.lg{width:64px;height:64px;font-size:22px}
+
+/* photo art */
+.photo{position:relative;display:block;width:100%;overflow:hidden;background:var(--line)}
+.photo img{display:block;width:100%;height:100%;object-fit:cover}
+.art{width:100%;height:100%;display:grid;place-items:center;background:
+  radial-gradient(circle at 30% 25%, hsl(var(--h) 70% 72% / .9), transparent 55%),
+  radial-gradient(circle at 75% 80%, hsl(calc(var(--h) + 40) 60% 55% / .9), transparent 60%),
+  hsl(var(--h) 45% 48%)}
+.art .e{font-size:clamp(56px,18vw,96px);filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
+.tile .art .e{font-size:clamp(28px,9vw,44px)}
+.sample-tag{position:absolute;left:8px;bottom:8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:rgba(0,0,0,.45);color:#fff;padding:2px 7px;border-radius:999px}
+.tile .sample-tag{display:none}
+
+/* post card */
+.post{background:var(--surface);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+.post-h{display:flex;align-items:center;gap:10px;padding:12px 8px 12px 12px}
+.who{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.who-t{min-width:0}
+.who-t b{display:block;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who-t small{color:var(--muted);font-size:12.5px}
+.cstamp{font-family:var(--f-mono);font-size:11px;font-weight:700;color:var(--stamp);border:1.5px solid var(--stamp);border-radius:4px;padding:1px 6px;transform:rotate(-3deg);flex:none}
+.post .photo{aspect-ratio:4/3}
+.post-b{padding:10px 14px 14px;display:flex;flex-direction:column;gap:6px}
+.acts{display:flex;align-items:center;gap:4px;margin-left:-8px}
+.act{display:inline-flex;align-items:center;gap:5px;height:36px;padding-inline:8px;border-radius:999px;font-weight:600;font-size:14px}
+.act:hover{background:var(--accent-soft)}
+.act svg{width:22px;height:22px}
+.act.liked{color:var(--stamp)}
+.act.liked svg path{fill:currentColor}
+.act.saved{color:var(--accent)}
+.act.saved svg path{fill:currentColor}
+.acts .date{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.dish-link{font-weight:700;font-size:16px;color:var(--fg);text-decoration:none}
+.dish-link:hover{text-decoration:underline}
+.where{color:var(--muted);font-size:14px}
+.cap{font-size:14.5px}
+.vis{font-size:12px;color:var(--muted)}
+
+/* suggested people */
+.people{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.person{flex:none;width:150px;background:var(--surface);border-radius:var(--r-md);padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;box-shadow:var(--shadow)}
+.person b{font-size:14px}
+.person small{color:var(--muted);font-size:12px;line-height:1.35}
+.person .btn{height:32px;font-size:13px;padding-inline:14px}
+
+/* explore */
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding-inline:14px;height:46px}
+.search svg{width:18px;height:18px;color:var(--muted);flex:none}
+.search input{flex:1;min-width:0;border:0;background:none;font:inherit;color:var(--fg);outline:none;-webkit-appearance:none;appearance:none}
+.search:focus-within{border-color:var(--accent)}
+.btn.sm{height:32px;padding-inline:14px;font-size:13px;flex:none}
+.c-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.c-card{background:var(--surface);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow)}
+.c-card .flag{font-size:30px;line-height:1}
+.c-card b{font-family:var(--f-display);font-weight:600;font-size:17px}
+.meter{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:999px}
+.c-card small{font-size:12.5px;color:var(--muted)}
+
+/* dish rows */
+.d-list{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.d-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);width:100%}
+.d-row:first-child{border-top:0}
+.d-row .em{font-size:28px;width:40px;text-align:center;flex:none}
+.d-row .t{flex:1;min-width:0}
+.d-row .t b{display:block;font-size:15px}
+.d-row .t small{display:block;color:var(--muted);font-size:13px;line-height:1.4}
+.d-row .t .meta{font-size:12px;color:var(--muted);margin-top:2px}
+.tick{flex:none;font-family:var(--f-mono);font-size:10.5px;font-weight:700;color:var(--stamp);border:1.5px solid var(--stamp);border-radius:50%;width:46px;height:46px;display:grid;place-items:center;transform:rotate(-10deg);text-align:center;line-height:1.1}
+.todo{flex:none;font-size:12.5px;font-weight:600;color:var(--accent)}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:10px}
+.hero .flag{font-size:44px;line-height:1}
+.hero h2{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.hero p{color:var(--muted)}
+.dish-hero .photo{aspect-ratio:16/10;border-radius:var(--r-md)}
+
+/* gallery */
+.gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;border-radius:var(--r-md);overflow:hidden}
+.tile{aspect-ratio:1;display:block;position:relative}
+.tile .photo{height:100%}
+.empty-state{background:var(--surface);border-radius:var(--r-md);padding:24px 18px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:12px;align-items:center}
+
+/* passport */
+.p-head{display:flex;gap:14px;align-items:center}
+.p-head h2{font-size:24px;font-weight:800}
+.p-head small{color:var(--muted)}
+.bio{color:var(--muted);font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow)}
+.stats div{padding:12px;text-align:center;border-left:1px solid var(--line)}
+.stats div:first-child{border-left:0}
+.stats b{display:block;font-family:var(--f-mono);font-size:22px;font-variant-numeric:tabular-nums}
+.stats span{font-size:12px;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:8px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;background:var(--surface);border:1.5px solid var(--line)}
+.badge.got{border-color:var(--ok);color:var(--ok)}
+.badge.not{color:var(--muted);opacity:.75}
+.visa{background:var(--surface);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;
+  background-image:repeating-linear-gradient(135deg, transparent 0 14px, var(--accent-soft) 14px 15px)}
+.visa-h{display:flex;align-items:center;gap:10px}
+.visa-h .flag{font-size:24px}
+.visa-h b{font-family:var(--f-display);font-weight:600;font-size:17px;flex:1}
+.stamps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stamp{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;text-align:center;border-radius:50%;background:var(--surface)}
+.stamp.sq{border-radius:12px}
+.stamp .se{font-size:24px;line-height:1}
+.stamp .sn{font-size:11px;font-weight:700;line-height:1.15;text-transform:uppercase;letter-spacing:.03em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.stamp .sd{font-family:var(--f-mono);font-size:9px;font-weight:700}
+.stamp.tried{color:var(--stamp);border:2px solid var(--stamp);box-shadow:inset 0 0 0 3px var(--surface),inset 0 0 0 4.5px var(--stamp);transform:rotate(var(--r,0deg))}
+.stamp.empty{color:var(--muted);border:1.5px dashed var(--line)}
+.stamp.empty .se{opacity:.35;filter:grayscale(1)}
+.board{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.b-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line);width:100%}
+.b-row:first-child{border-top:0}
+.b-row .rk{font-family:var(--f-mono);font-weight:700;width:20px;color:var(--muted)}
+.b-row .nm{flex:1;min-width:0;font-weight:600}
+.b-row .sc{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
+.b-row.me{background:var(--accent-soft)}
+.offlist{display:flex;flex-direction:column;gap:6px}
+
+/* sheet */
+#sheet-wrap{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.sheet{position:relative;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.sheet{animation:none}}
+.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
+.sheet-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sheet-h h2{font-size:20px;font-weight:700}
+.menu{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);overflow:hidden}
+.menu button{padding:14px 16px;border-top:1px solid var(--line);font-weight:600}
+.menu button:first-child{border-top:0}
+.menu button.danger{color:var(--stamp)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field select,.field input[type=text],.field textarea{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;width:100%}
+.field textarea{resize:vertical;min-height:70px}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:4/3;max-width:100%;border:2px dashed var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--muted);text-align:center;padding:16px;cursor:pointer;overflow:hidden;position:relative}
+.drop:hover{border-color:var(--accent)}
+.drop svg{width:34px;height:34px}
+.drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0}
+.chip span{display:inline-flex;height:36px;align-items:center;padding-inline:14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:600;cursor:pointer}
+.chip input:checked + span{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.chip input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.hint{font-size:12.5px;color:var(--muted)}
+.radios{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);overflow:hidden}
+.radios label{display:flex;gap:10px;align-items:center;padding:13px 14px;border-top:1px solid var(--line);cursor:pointer}
+.radios label:first-child{border-top:0}
+.radios input{accent-color:var(--accent);width:18px;height:18px}
+
+/* country tabs + guides */
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border-radius:999px;padding:4px;box-shadow:var(--shadow)}
+.seg button{height:38px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted);text-align:center}
+.seg button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
+.guide,.pick{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px}
+.g-top{display:flex;gap:12px;align-items:center}
+.g-id{display:flex;flex-direction:column;gap:2px;min-width:0}
+.g-id b{font-family:var(--f-display);font-size:19px;font-weight:600}
+.g-id small{color:var(--muted);font-size:13px}
+.verified{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:700;color:var(--accent)}
+.verified svg,.checks svg,.g-pill svg{width:14px;height:14px;flex:none}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.checks li{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--ok);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.g-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--accent)}
+.habits{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.habit{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.habit:first-child{border-top:0}
+.habit b{font-size:14.5px}
+.habit p{font-size:14px;color:var(--muted)}
+.pick-h{display:flex;align-items:center;gap:12px;width:100%}
+.pick-h .em{font-size:30px;width:40px;text-align:center;flex:none}
+.pick-h .t{min-width:0}
+.pick-h b{display:block;font-family:var(--f-display);font-size:17px;font-weight:600}
+.pick-h small{color:var(--muted);font-size:13px}
+.must{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.must span{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.locked{display:flex;align-items:center;gap:12px;width:100%;margin-top:6px;padding:12px;border-radius:var(--r-sm);border:1.5px dashed var(--accent);background:var(--accent-soft)}
+.locked svg{width:22px;height:22px;color:var(--accent);flex:none}
+.lk-t{flex:1;min-width:0}
+.lk-t b{display:block;font-size:14px}
+.lk-t small{color:var(--muted);font-size:12.5px}
+.lk-p{font-weight:700;color:var(--accent);font-size:14px;flex:none}
+.places{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.place{border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;display:flex;flex-direction:column;gap:3px;background:var(--bg)}
+.pl-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.place small{color:var(--muted);font-size:13px}
+.place p{font-size:14px}
+.unlock-cta{background:var(--accent);color:var(--accent-fg);border-radius:var(--r-md);padding:16px;display:flex;flex-direction:column;gap:8px}
+.unlock-cta h3{font-size:19px;font-weight:700}
+.unlock-cta p{font-size:14px;opacity:.92}
+.unlock-cta .btn{background:var(--accent-fg);color:var(--accent);border-color:var(--accent-fg);align-self:flex-start;margin-top:4px}
+.incl{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14.5px}
+.price{display:flex;align-items:baseline;gap:10px}
+.price .mono{font-size:32px;font-weight:700}
+.price small{color:var(--muted)}
+
+.access{display:flex;align-items:center;flex-wrap:wrap;gap:12px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:14px}
+.access .t{flex:1;min-width:180px}
+.access .t b{display:block;font-size:15px}
+.access .t small{color:var(--muted);font-size:13px}
+.ok-dot{width:34px;height:34px;border-radius:50%;background:var(--ok);color:var(--surface);display:grid;place-items:center;flex:none}
+.ok-dot svg{width:18px;height:18px}
+.strike{text-decoration:line-through;opacity:.65;font-weight:500}
+.demo-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:12.5px;color:var(--muted)}
+.demo-row button{font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:underline}
+
+/* guide portal */
+.zone{display:flex;flex-direction:column;gap:6px;padding-top:14px;border-top:2px solid var(--line)}
+.zone h2{font-size:22px;font-weight:800}
+.zone-tag{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:1.5px solid var(--ok);color:var(--ok);background:var(--surface)}
+.zone-tag.paid{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.zone-tag svg{width:14px;height:14px}
+.p-card{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:12px}
+.p-card.paid{border:1.5px solid var(--accent)}
+.p-card h3{font-size:17px;font-weight:600}
+.p-item{border:1px solid var(--line);border-radius:var(--r-sm);padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.p-item-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.p-place{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.p-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.link-del{font-size:12.5px;font-weight:600;color:var(--stamp)}
+.g-video{display:block;width:100%;max-width:100%;aspect-ratio:16/9;border-radius:var(--r-sm);background:#000;object-fit:contain}
+.drop.video{aspect-ratio:16/9}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.prose{white-space:pre-line}
+.p-bar{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:4;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 16px;box-shadow:0 6px 20px rgba(0,0,0,.14)}
+#p-status{flex:1;min-width:0;font-size:13.5px;font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.preview-bar{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;background:var(--accent-soft);border-radius:var(--r-sm);padding:10px 12px;font-size:13.5px;font-weight:600}
+.preview-bar button{color:var(--accent);text-decoration:underline;font-weight:700}
+
+.byline{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);align-self:flex-start}
+.byline .av{width:20px;height:20px;font-size:8.5px}
+.habit .byline{margin-top:4px}
+.g-pill.muted{color:var(--muted);font-weight:600}
+.shared .field{align-self:stretch}
+.ro-row{display:flex;gap:10px;align-items:center;padding-top:8px;border-top:1px solid var(--line)}
+.ro-row .em{font-size:24px;width:32px;text-align:center;flex:none}
+.ro-row .t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ro-row b{font-size:14.5px}
+.credits{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.credit{display:inline-flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;border:1px solid var(--line);border-radius:999px}
+.credit .av{width:30px;height:30px;font-size:11px}
+.credit b{display:block;font-size:13px;line-height:1.2}
+.credit small{display:block;font-size:11.5px;color:var(--muted);line-height:1.2}
+.shared{border:1px dashed var(--line);border-radius:var(--r-sm);padding:10px 12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:var(--surface)}
+.city-pick{display:flex;flex-direction:column;gap:8px}
+.city-chips{display:flex;flex-wrap:wrap;gap:8px}
+.cchip{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 14px;border-radius:var(--r-sm);border:1.5px solid var(--line);background:var(--surface)}
+.cchip b{font-size:14px}
+.cchip small{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--muted)}
+.cchip small svg{width:12px;height:12px}
+.cchip.has small{color:var(--ok);font-weight:600}
+.cchip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+
+#toast{position:fixed;left:50%;bottom:calc(136px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:var(--fg);color:var(--bg);font-size:14px;font-weight:500;padding:11px 16px;border-radius:12px;max-width:min(520px, calc(100% - 32px));box-shadow:0 6px 24px rgba(0,0,0,.25)}
+
+/* friends version additions */
+.av-img{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;display:block}
+.av-img.lg{width:64px;height:64px}
+.av-img.sm,.av.sm{width:22px;height:22px;font-size:9px}
+.faces{display:inline-flex;align-items:center;margin-left:2px}
+.faces > *{margin-left:-6px;border:2px solid var(--surface);box-sizing:content-box}
+.faces > *:first-child{margin-left:0}
+.wordmark small{font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0}
+.status{font-size:13px;border-radius:var(--r-sm);padding:10px 12px;background:var(--accent-soft);color:var(--fg)}
+.status b{font-weight:700}
+.srcs{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11.5px;color:var(--muted)}
+.srcs a{font-family:var(--f-mono);font-weight:700;font-size:11px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:0 5px;color:var(--accent)}
+.srcs a:hover{border-color:var(--accent)}
+.place .pl-h a{font-size:12.5px;font-weight:700;text-decoration:none;flex:none}
+.place .addr{color:var(--muted);font-size:13px;user-select:text}
+.rule{padding:12px 14px;border-top:1px solid var(--line);font-size:14.5px}
+.rule:first-child{border-top:0}
+.week{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.wk{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:10px 14px;border-top:1px solid var(--line);align-items:baseline}
+.wk:first-child{border-top:0}
+.wk .dy{font-family:var(--f-mono);font-weight:700;font-size:13px;color:var(--muted)}
+.wk.today{background:var(--accent-soft)}
+.wk.today .dy{color:var(--accent)}
+.wk ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:14px;min-width:0}
+.wk li small{color:var(--muted)}
+.prov{font-size:12.5px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+ol.sources{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+ol.sources a{word-break:break-word}
+.inline-form{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.inline-form .field{flex:1;min-width:180px}
+.pp{position:relative;display:block;flex:none;cursor:pointer;border-radius:50%}
+.pp .cam{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;border:2px solid var(--bg)}
+.pp .cam svg{width:14px;height:14px}
+.pp:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+label.link{color:var(--accent);font-weight:600;cursor:pointer}
+:root{--star:#B7791F}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --star:#F2B84B } }
+:root[data-theme="dark"]{ --star:#F2B84B }
+.rating{color:var(--star);letter-spacing:1px;font-size:15px}
+.rating .off{color:var(--line)}
+.dish-rating{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.dish-rating b{color:var(--fg);font-family:var(--f-mono)}
+.rate-rows{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:6px 10px}
+.rate-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.rate-row .rl{font-size:14px;font-weight:600}
+.rate-overall{font-size:13.5px;color:var(--muted)}
+.rate-overall b{color:var(--fg);font-family:var(--f-mono)}
+.rate-line{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px}
+.rate-line b{font-size:14px}
+.rate-bd{font-size:12.5px;color:var(--muted);width:100%}
+.rate-bd b{color:var(--fg);font-family:var(--f-mono);font-weight:700}
+.stars-in{display:flex;align-items:center;gap:0;flex-wrap:nowrap}
+.stars-in button{font-size:26px;line-height:1;width:36px;height:38px;color:var(--line);border-radius:8px}
+.stars-in button.on{color:var(--star)}
+.stars-in button:hover{background:var(--accent-soft)}
+.stars-in .rate-word{margin-left:8px;font-size:13.5px;color:var(--muted);font-weight:600}
+.cc{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:12px 12px 12px;display:flex;flex-direction:column;gap:10px}
+.cc-h{display:flex;align-items:center;gap:10px;width:100%}
+.cc-h .flag{font-size:26px;line-height:1;flex:none}
+.cc-h .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.cc-h b{font-family:var(--f-display);font-weight:600;font-size:16px}
+.cc-h small{color:var(--muted);font-size:12.5px}
+.cc-h .chev{font-size:22px;color:var(--muted);flex:none}
+.cc-done{color:var(--ok);font-weight:700}
+.meter.done i{background:var(--ok)}
+.meter i{background:var(--accent)}
+.strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px;padding-inline:2px}
+.strip::-webkit-scrollbar{display:none}
+.sthumb{flex:none;width:76px;height:76px;border-radius:10px;overflow:hidden;position:relative}
+.sthumb .photo{height:100%}
+.off-tag{position:absolute;left:4px;bottom:4px;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.55);color:#fff;border-radius:4px;padding:1px 4px}
+.cropper{position:relative;border-radius:var(--r-md);overflow:hidden;background:var(--line);aspect-ratio:4/3;max-width:100%}
+.cropper canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.cropper canvas:active{cursor:grabbing}
+.crop-hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);font-size:11.5px;font-weight:600;background:rgba(0,0,0,.5);color:#fff;border-radius:999px;padding:3px 10px;white-space:nowrap;pointer-events:none}
+.frame-pick{display:flex;gap:6px}
+.cropper{margin-inline:auto;width:100%}
+.crop-ctrl{display:flex;align-items:center;gap:10px}
+.crop-ctrl input{flex:1;accent-color:var(--accent)}
+.map-search{height:42px}
+.mq-wrap{position:relative}
+.sugg{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:7;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden auto;max-height:330px}
+.sugg button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-top:1px solid var(--line);font-size:15px}
+.sugg button:first-child{border-top:0}
+.sugg button:hover,.sugg button:focus-visible{background:var(--accent-soft);outline:none}
+.sugg .fl{font-size:20px;width:26px;text-align:center;flex:none;color:var(--muted)}
+.sugg .nm{flex:1;min-width:0}
+.sugg .nm b{font-weight:800}
+.sugg small{color:var(--muted);font-size:12.5px;flex:none}
+.sugg-none{padding:12px 14px;color:var(--muted);font-size:14px}
+.mq-res{display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:10px 12px}
+.mq-res .flag{font-size:24px;line-height:1}
+.mq-res .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.mq-res b{font-size:15px}
+.mq-res small{color:var(--muted);font-size:12.5px}
+svg.world path.hl{stroke:var(--fg);stroke-width:1.8px}
+.fchips{display:flex;flex-wrap:wrap;gap:6px}
+.fchips::-webkit-scrollbar{display:none}
+.fchip{flex:none;height:34px;padding-inline:11px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--fg)}
+.fchip:hover{border-color:var(--accent)}
+.fchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.map-box{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:10px;overflow:hidden}
+.map-box.loading{aspect-ratio:2/1;display:grid;place-items:center}
+svg.world{display:block;width:100%;height:auto;max-width:100%}
+svg.world{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+svg.world path{stroke:var(--surface);stroke-width:.7px;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.map-box{position:relative}
+.map-ctrl{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px}
+.map-ctrl button{width:34px;height:34px;border-radius:10px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);font-size:18px;font-weight:700;line-height:1;display:grid;place-items:center;color:var(--fg);text-align:center}
+.map-ctrl button:hover{border-color:var(--accent)}
+.map-ctrl .mz-reset{display:none;font-size:16px}
+.map-box.zoomed .mz-reset{display:grid}
+.zoom-hint{margin-left:auto}
+svg.world .c-o{fill:var(--line)}
+svg.world .c-l{fill:var(--accent-soft);stroke:var(--accent);stroke-width:.6px;cursor:pointer}
+svg.world .c-v{fill:var(--stamp);cursor:pointer}
+svg.world .c-l:hover,svg.world .c-v:hover{opacity:.8}
+svg.world .pin{fill:var(--stamp);stroke:var(--surface);stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:pointer}
+svg.world .c-c{fill:var(--ok);cursor:pointer}
+svg.world .c-c:hover{opacity:.8}
+svg.world .pin.done{fill:var(--ok)}
+.legend .k-c{background:var(--ok)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend .k-v{background:var(--stamp)}
+.legend .k-l{background:var(--accent-soft);border:1px solid var(--accent)}
+.legend .k-o{background:var(--line)}
+.field input[type=date]{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;width:100%}
+
+/* website additions */
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+body.signed-out .tabs{display:none}
+.auth{padding-top:28px;padding-bottom:40px}
+.auth-hero{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.auth-hero p{color:var(--muted);font-size:15px}
+.auth-card{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:14px}
+.auth-card h2{font-size:22px;font-weight:800}
+.auth-card .btn{height:44px}
+.field input[type=email],.field input[type=password]{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;width:100%}
+.auth-msg{font-size:14px;color:var(--stamp);font-weight:600}
+.auth-switch{font-size:14px;color:var(--muted)}
+.mem-list{display:flex;flex-direction:column}
+.mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.mem:first-child{border-top:0}
+.mem span{min-width:0;overflow-wrap:anywhere}
+.mem small{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;margin-left:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="bar" id="bar"></header>
+  <main id="view"></main>
+</div>
+<nav class="tabs" aria-label="Main">
+  <div class="tabs-in">
+    <button class="tab" data-act="tab" data-id="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Feed</button>
+    <button class="tab" data-act="tab" data-id="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
+    <button class="tab log" data-act="log" data-id=""><span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>Log a meal</button>
+    <button class="tab" data-act="tab" data-id="passport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M9 16h6"/></svg>Passport</button>
+  </div>
+</nav>
+<div id="sheet-wrap" hidden><div class="scrim" data-act="close"></div><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hue = str => { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 360; };
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtDate = iso => { const d = new Date(iso + "T12:00:00"); return isNaN(d) ? "" : d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear(); };
+const stampDate = iso => { const d = new Date(iso + "T12:00:00"); return String(d.getDate()).padStart(2,"0") + " " + MONTHS[d.getMonth()].toUpperCase() + " " + String(d.getFullYear()).slice(2); };
+const toISO = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+const todayISO = () => toISO(new Date());
+
+const I = {
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  camera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  video:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>'
+};
+
+/* ---------- Dishes by country ---------- */
+const COUNTRIES = [
+ ["GB","United Kingdom","🇬🇧",[
+  ["fullenglish","Full English breakfast","🍳","Bacon, sausage, eggs, beans, tomato, mushrooms and toast on one plate. A weekend institution."],
+  ["crumpets","Crumpets","🧈","Spongy griddle cakes full of holes, toasted and loaded with butter."],
+  ["roast","Sunday roast","🍖","Roast meat and potatoes, Yorkshire pudding, veg and gravy, served in pubs on Sundays."],
+  ["fishchips","Fish and chips","🐟","Battered cod or haddock with thick chips, salt and vinegar."],
+  ["pieandmash","Pie and mash","🥧","East London's minced beef pie with mash and green parsley liquor.","London"],
+  ["hotpot","Lancashire hotpot","🍲","Lamb and onion stew under a lid of sliced potato, baked until the top goes crisp.","North West"],
+  ["mantart","Manchester tart","🍰","Pastry, raspberry jam, thick custard and desiccated coconut. A school-dinner classic.","Manchester"],
+  ["sticky","Sticky toffee pudding","🍮","Soft date sponge drowned in toffee sauce, with custard or ice cream."]]],
+ ["DE","Germany","🇩🇪",[
+  ["currywurst","Currywurst","🌭","Sliced pork sausage under curry ketchup and curry powder. Born in Berlin, eaten everywhere.","Berlin"],
+  ["bratwurst","Bratwurst","🔥","Grilled pork sausage in a crusty roll with mustard, sold at every market and football ground."],
+  ["brezel","Brezel","🥨","Soft pretzel with a dark, crisp crust and coarse salt.","Southern Germany"],
+  ["doner","Döner kebab","🥙","Created by Turkish-German cooks in Berlin and now the country's favourite fast food."],
+  ["sauerbraten","Sauerbraten","🥩","Beef marinated for days, then braised in a sweet-sour sauce.","Rhineland"],
+  ["himmel","Himmel un Ääd","🥔","'Heaven and earth': mashed potato and apple with black pudding and fried onions.","Cologne"],
+  ["halvehahn","Halve Hahn","🧀","A rye roll with aged Gouda, mustard and onion. Despite the name, there's no chicken.","Cologne"],
+  ["reibekuchen","Reibekuchen","🥞","Crispy potato pancakes with apple sauce, a favourite at Rhineland Christmas markets.","Rhineland"],
+  ["kolsch","Kölsch","🍺","Cologne's own light beer, served in small glasses that keep on coming.","Cologne"],
+  ["kirschtorte","Schwarzwälder Kirschtorte","🍰","Black Forest gâteau: chocolate sponge, cherries, kirsch and whipped cream.","Black Forest"]]],
+ ["IT","Italy","🇮🇹",[
+  ["cacio","Cacio e pepe","🍝","Rome's three-ingredient pasta: pecorino, black pepper and starchy pasta water."],
+  ["pizza","Pizza margherita","🍕","Naples' original. Soft, blistered crust, San Marzano tomato, fior di latte, basil."],
+  ["risotto","Risotto alla milanese","🍚","Milan's saffron risotto, often served with osso buco."],
+  ["arancini","Arancini","🍙","Fried Sicilian rice balls, usually filled with ragù or ham and mozzarella."],
+  ["gelato","Gelato","🍨","Denser and silkier than ice cream. Look for muted colours, a sign it's made in house."],
+  ["tiramisu","Tiramisu","🍰","Coffee-soaked savoiardi layered with mascarpone and cocoa."]]],
+ ["JP","Japan","🇯🇵",[
+  ["ramen","Ramen","🍜","Regional styles everywhere: tonkotsu in Fukuoka, miso in Sapporo, shoyu in Tokyo."],
+  ["sushi","Nigiri sushi","🍣","Hand-pressed rice topped with fish. Best at the counter, eaten straight away."],
+  ["okonomiyaki","Okonomiyaki","🥞","Savoury cabbage pancake grilled at your table. Osaka and Hiroshima both claim it."],
+  ["takoyaki","Takoyaki","🐙","Osaka street snack: battered balls of octopus, topped with sauce and bonito flakes."],
+  ["tonkatsu","Tonkatsu","🍖","Panko-crumbed pork cutlet with shredded cabbage and thick sauce."],
+  ["matcha","Matcha parfait","🍵","Kyoto's layered dessert of matcha ice cream, jelly, red bean and mochi."]]],
+ ["MX","Mexico","🇲🇽",[
+  ["pastor","Tacos al pastor","🌮","Pork marinated in chilli and achiote, shaved off a vertical spit with pineapple."],
+  ["mole","Mole poblano","🍲","Puebla's dark sauce of chillies, chocolate, spices and nuts, often over turkey."],
+  ["chilaquiles","Chilaquiles","🍳","Fried tortilla pieces simmered in salsa, a breakfast staple."],
+  ["tamales","Tamales","🫔","Masa dough steamed in a corn husk or banana leaf, with endless fillings."],
+  ["elote","Elote","🌽","Grilled corn on the cob with mayo, cheese, chilli and lime."],
+  ["pozole","Pozole","🥣","Hominy and pork broth, topped at the table with radish, lettuce and oregano."]]],
+ ["TH","Thailand","🇹🇭",[
+  ["krapao","Pad kra pao","🌶️","Stir-fried minced pork with holy basil and chilli, over rice with a fried egg."],
+  ["somtam","Som tam","🥗","Pounded green papaya salad: sour, salty, sweet and very hot."],
+  ["khaosoi","Khao soi","🍜","Chiang Mai's coconut curry noodle soup, topped with crispy noodles."],
+  ["massaman","Massaman curry","🍛","Mild, rich curry with potatoes and peanuts, influenced by Persian spices."],
+  ["mango","Mango sticky rice","🥭","Ripe mango with sweet coconut sticky rice. Best in mango season, April to June."],
+  ["tomyum","Tom yum goong","🦐","Hot and sour prawn soup with lemongrass, galangal and lime leaf."]]],
+ ["PT","Portugal","🇵🇹",[
+  ["nata","Pastel de nata","🥧","Custard tart with a flaky shell, best warm with cinnamon on top."],
+  ["bras","Bacalhau à Brás","🐟","Salt cod with matchstick potatoes, onion and egg."],
+  ["francesinha","Francesinha","🥪","Porto's sandwich of steak, ham and sausage, under melted cheese and beer sauce."],
+  ["bifana","Bifana","🥖","Garlicky marinated pork in a soft roll. Add mustard."],
+  ["sardines","Grilled sardines","🐠","Charcoal-grilled whole sardines, the smell of Lisbon in June."],
+  ["caldoverde","Caldo verde","🥬","Potato and kale soup with a slice of chouriço."]]],
+ ["ES","Spain","🇪🇸",[
+  ["paella","Paella valenciana","🥘","Valencia's rice with chicken, rabbit and beans, cooked in a wide pan. A lunch dish, never dinner."],
+  ["tortilla","Tortilla española","🥚","Thick potato and egg omelette, often served by the slice as a tapa."],
+  ["jamon","Jamón ibérico","🍖","Cured ham from black Iberian pigs, sliced thin by hand."],
+  ["churros","Churros con chocolate","🍫","Fried dough dipped in thick hot chocolate, for breakfast or after a late night."],
+  ["bravas","Patatas bravas","🥔","Fried potatoes with a spicy tomato sauce, often with aioli too."],
+  ["gambas","Gambas al ajillo","🦐","Prawns sizzling in olive oil with garlic and chilli."]]],
+ ["VN","Vietnam","🇻🇳",[
+  ["pho","Phở bò","🍜","Beef noodle soup with a long-simmered broth. A breakfast dish in Hanoi."],
+  ["banhmi","Bánh mì","🥖","Crackly baguette with pâté, pork, pickles, herbs and chilli."],
+  ["buncha","Bún chả","🍢","Hanoi's grilled pork with rice noodles and dipping broth."],
+  ["comtam","Cơm tấm","🍚","Saigon's broken rice with grilled pork chop and fish sauce."],
+  ["banhxeo","Bánh xèo","🥞","Crisp turmeric pancake with prawns and pork, wrapped in herbs."],
+  ["eggcoffee","Egg coffee","☕","Hanoi's cà phê trứng: strong coffee under whipped egg yolk and sugar."]]],
+ ["GR","Greece","🇬🇷",[
+  ["gyros","Gyros pita","🥙","Shaved pork or chicken in pita with tzatziki, tomato, onion and chips."],
+  ["moussaka","Moussaka","🍆","Baked layers of aubergine, spiced meat sauce and béchamel."],
+  ["spanakopita","Spanakopita","🥧","Spinach and feta pie in crisp filo."],
+  ["horiatiki","Horiatiki","🥗","Village salad: tomato, cucumber, olives, onion and a slab of feta."],
+  ["loukoumades","Loukoumades","🍩","Small fried dough balls soaked in honey syrup."],
+  ["kleftiko","Kleftiko","🍖","Lamb slow-cooked in paper with garlic, lemon and oregano."]]],
+ ["IN","India","🇮🇳",[
+  ["dosa","Masala dosa","🌯","South Indian fermented crêpe filled with spiced potato, with sambar and chutney."],
+  ["butterchicken","Butter chicken","🍗","Delhi's tandoori chicken in a buttery tomato gravy."],
+  ["biryani","Hyderabadi biryani","🍚","Layered rice and meat, sealed and slow-cooked dum style."],
+  ["panipuri","Pani puri","🥟","Hollow puris filled with spiced water and chickpeas, eaten in one bite."],
+  ["chole","Chole bhature","🫓","Spicy chickpea curry with puffed fried bread."],
+  ["vadapav","Vada pav","🍔","Mumbai's potato fritter in a bun with chutneys."]]]
+].map(([code,name,flag,ds]) => ({code,name,flag,dishes:ds.map(([slug,dn,emoji,desc,region]) => ({id:code.toLowerCase()+"-"+slug,name:dn,emoji,desc,country:code,region}))}));
+/* More of Europe and South America */
+[
+ ["FR","France","🇫🇷",[
+  ["croissant","Croissant","🥐","Buttery, flaky and best from a neighbourhood boulangerie first thing in the morning."],
+  ["bourguignon","Boeuf bourguignon","🍲","Beef braised slowly in red wine with mushrooms, onions and lardons.","Burgundy"],
+  ["crepes","Crêpes and galettes","🥞","Thin pancakes: sweet crêpes, or savoury buckwheat galettes with ham, egg and cheese.","Brittany"],
+  ["steakfrites","Steak frites","🥩","Bistro classic of steak and chips, often with béarnaise or a peppercorn sauce."],
+  ["bouillabaisse","Bouillabaisse","🐟","Marseille's fish stew with saffron, served with rouille and toasted bread.","Marseille"],
+  ["cremebrulee","Crème brûlée","🍮","Cold vanilla custard under a crackly layer of burnt sugar."]]],
+ ["NL","Netherlands","🇳🇱",[
+  ["stroopwafel","Stroopwafel","🧇","Two thin waffles sandwiched with caramel syrup. Best warm from a market stall.","Gouda"],
+  ["bitterballen","Bitterballen","🧆","Crisp fried balls of beef ragout, eaten with mustard alongside a beer."],
+  ["haring","Hollandse nieuwe haring","🐟","Raw brined herring with chopped onion, held by the tail or in a soft roll."],
+  ["poffertjes","Poffertjes","🥞","Tiny, fluffy pancakes with butter and a pile of powdered sugar."],
+  ["stamppot","Stamppot","🥔","Mashed potato with kale or sauerkraut and a smoked sausage. Winter food."],
+  ["patat","Patat","🍟","Thick-cut fries in a paper cone, usually with mayonnaise or 'oorlog' with satay sauce and onion."]]],
+ ["BE","Belgium","🇧🇪",[
+  ["moules","Moules-frites","🦪","A pot of mussels steamed in white wine or beer, with a side of fries."],
+  ["frites","Frites from a frietkot","🍟","Double-fried chips from a roadside stand, with one of a dozen sauces."],
+  ["gaufre","Liège waffle","🧇","Dense, chewy waffle studded with pearl sugar that caramelises in the iron.","Liège"],
+  ["carbonade","Carbonade flamande","🍲","Flemish beef stew cooked in brown beer, often with bread and mustard.","Flanders"],
+  ["pralines","Pralines","🍫","Filled chocolates, invented in Brussels. Buy them loose from a chocolatier."],
+  ["speculoos","Speculoos","🍪","Spiced caramelised biscuits, traditionally eaten around St Nicholas' Day."]]],
+ ["IE","Ireland","🇮🇪",[
+  ["stew","Irish stew","🍲","Lamb or mutton slow-cooked with potatoes, onions and carrots."],
+  ["fullirish","Full Irish breakfast","🍳","Like a full English, but with white and black pudding and soda bread."],
+  ["sodabread","Brown soda bread","🍞","Dense bread raised with buttermilk and bicarbonate, served with plenty of butter."],
+  ["boxty","Boxty","🥞","Potato pancake made with grated raw and mashed potato.","The north-west"],
+  ["chowder","Seafood chowder","🥣","Creamy fish and shellfish soup with brown bread, a pub lunch on the coast."],
+  ["coddle","Dublin coddle","🥔","Sausages, bacon, potatoes and onions simmered together.","Dublin"]]],
+ ["AT","Austria","🇦🇹",[
+  ["schnitzel","Wiener Schnitzel","🥩","Thin breaded veal cutlet fried in butter or lard, with potato salad and lemon.","Vienna"],
+  ["sacher","Sachertorte","🍰","Dense chocolate cake with apricot jam and a glossy chocolate glaze, with whipped cream.","Vienna"],
+  ["strudel","Apfelstrudel","🥧","Paper-thin pastry rolled around spiced apple, raisins and breadcrumbs."],
+  ["kaiserschmarrn","Kaiserschmarrn","🥞","Torn, fluffy pancake with powdered sugar and plum compote."],
+  ["tafelspitz","Tafelspitz","🍖","Boiled beef in its broth, with apple horseradish and chive sauce.","Vienna"],
+  ["kasekrainer","Käsekrainer","🌭","Cheese-filled sausage from a Würstelstand, often late at night.","Vienna"]]],
+ ["CH","Switzerland","🇨🇭",[
+  ["fondue","Cheese fondue","🫕","Melted cheese, wine and kirsch, with bread for dipping. Winter food."],
+  ["raclette","Raclette","🧀","Melted cheese scraped over potatoes, with gherkins and pickled onions.","Valais"],
+  ["rosti","Rösti","🥔","Grated potato fried into a crisp golden cake."],
+  ["geschnetzeltes","Zürcher Geschnetzeltes","🍲","Sliced veal in a cream and mushroom sauce, served with rösti.","Zurich"],
+  ["chocolate","Swiss chocolate","🍫","Milk chocolate was perfected here. Buy from a local confiserie."],
+  ["birchermuesli","Birchermüesli","🥣","Oats soaked overnight with apple, nuts and yoghurt, created by a Zurich doctor.","Zurich"]]],
+ ["CZ","Czechia","🇨🇿",[
+  ["svickova","Svíčková","🍖","Marinated beef with a creamy root-vegetable sauce, dumplings, cranberries and cream."],
+  ["veprove","Vepřo knedlo zelo","🥟","Roast pork with bread dumplings and sauerkraut."],
+  ["syr","Smažený sýr","🧀","Fried breaded cheese with tartare sauce and chips. A pub staple."],
+  ["gulas","Guláš","🍲","Czech-style beef goulash with bread dumplings, made for mopping up with beer."],
+  ["chlebicky","Chlebíčky","🥪","Small open sandwiches with ham, egg, salad and pickles from a lahůdky deli."],
+  ["kolac","Koláč","🥯","Round sweet bun filled with poppy seed, plum jam or sweet curd cheese."]]],
+ ["PL","Poland","🇵🇱",[
+  ["pierogi","Pierogi","🥟","Dumplings filled with potato and cheese, meat, cabbage or fruit."],
+  ["zurek","Żurek","🥣","Sour rye soup with sausage and egg, sometimes served in a bread bowl."],
+  ["bigos","Bigos","🍲","Hunter's stew of sauerkraut, cabbage and several meats, better the next day."],
+  ["golabki","Gołąbki","🥬","Cabbage leaves stuffed with meat and rice in tomato sauce."],
+  ["paczki","Pączki","🍩","Rich doughnuts filled with rose jam, eaten by the dozen on Fat Thursday."],
+  ["zapiekanka","Zapiekanka","🥖","Half a baguette with mushrooms and cheese, toasted and topped with ketchup.","Kraków"]]],
+ ["HU","Hungary","🇭🇺",[
+  ["gulyas","Gulyás","🥣","Beef and paprika soup, the original goulash, with potatoes and peppers."],
+  ["langos","Lángos","🫓","Deep-fried dough with sour cream, cheese and garlic."],
+  ["paprikas","Csirkepaprikás","🍗","Chicken in a paprika and sour cream sauce, with small dumplings."],
+  ["kurtos","Kürtőskalács","🍩","Chimney cake: sweet dough baked on a spit and rolled in sugar or cinnamon."],
+  ["dobos","Dobos torta","🍰","Layered sponge and chocolate buttercream under a hard caramel top.","Budapest"],
+  ["toltott","Töltött káposzta","🥬","Stuffed cabbage rolls with sauerkraut and sour cream."]]],
+ ["HR","Croatia","🇭🇷",[
+  ["peka","Peka","🍖","Lamb or octopus and vegetables slow-cooked under an iron bell in embers. Usually ordered ahead."],
+  ["crnirizot","Crni rižot","🦑","Black risotto coloured with cuttlefish ink.","Dalmatia"],
+  ["strukli","Štrukli","🥟","Pastry filled with cottage cheese, boiled or baked with cream.","Zagreb"],
+  ["burek","Burek","🥧","Flaky filo pie with cheese or meat, a bakery breakfast with yoghurt."],
+  ["pasticada","Pašticada","🍲","Beef marinated and braised in wine and prunes, served with gnocchi.","Dalmatia"],
+  ["cevapi","Ćevapi","🥙","Small grilled minced-meat sausages in flatbread with onion and ajvar."]]],
+ ["SE","Sweden","🇸🇪",[
+  ["kottbullar","Köttbullar","🧆","Meatballs with cream sauce, mashed potato, lingonberries and pickled cucumber."],
+  ["kanelbulle","Kanelbulle","🥐","Cinnamon bun with cardamom, eaten at fika, the daily coffee break."],
+  ["gravlax","Gravlax","🐟","Salmon cured with salt, sugar and dill, with mustard sauce."],
+  ["skagen","Toast Skagen","🦐","Prawns in dill mayonnaise on fried bread, topped with roe."],
+  ["semla","Semla","🍰","Cardamom bun filled with almond paste and whipped cream, eaten before Lent."],
+  ["sill","Sill","🐟","Pickled herring in mustard, onion or dill sauce, on every festive table."]]],
+ ["DK","Denmark","🇩🇰",[
+  ["smorrebrod","Smørrebrød","🥪","Open rye-bread sandwiches piled with herring, roast beef or egg and prawns."],
+  ["polse","Rød pølse","🌭","Bright red hot dog from a pølsevogn, with remoulade, onions and pickles."],
+  ["frikadeller","Frikadeller","🧆","Flat pork meatballs with potatoes and gravy or red cabbage."],
+  ["stegtflaesk","Stegt flæsk","🥓","Crispy fried pork belly with potatoes and parsley sauce, voted the national dish."],
+  ["wienerbrod","Wienerbrød","🥐","What the rest of the world calls a Danish pastry."],
+  ["aebleskiver","Æbleskiver","🍩","Round pancake puffs with jam and powdered sugar, a Christmas treat."]]],
+ ["AR","Argentina","🇦🇷",[
+  ["asado","Asado","🥩","A long, slow barbecue of beef cuts, sausages and offal over wood or charcoal."],
+  ["empanadas","Empanadas","🥟","Baked or fried pastries with beef, chicken, ham and cheese or corn."],
+  ["milanesa","Milanesa","🍖","Breaded beef cutlet, often 'a la napolitana' with ham, cheese and tomato sauce."],
+  ["choripan","Choripán","🌭","Grilled chorizo in crusty bread with chimichurri."],
+  ["alfajores","Alfajores","🍪","Two soft biscuits sandwiched with dulce de leche, often dipped in chocolate."],
+  ["provoleta","Provoleta","🧀","A thick slice of provolone grilled until bubbling, sprinkled with oregano."]]],
+ ["BR","Brazil","🇧🇷",[
+  ["feijoada","Feijoada","🍲","Black bean stew with pork, served with rice, farofa, greens and orange. Often a Saturday dish."],
+  ["paodequeijo","Pão de queijo","🧀","Chewy cheese bread rolls made with cassava flour.","Minas Gerais"],
+  ["coxinha","Coxinha","🍗","Teardrop-shaped fried dough filled with shredded chicken."],
+  ["moqueca","Moqueca","🐟","Fish stew with coconut milk, tomato and dendê palm oil.","Bahia"],
+  ["picanha","Picanha","🥩","Rump cap steak with its fat cap, the star of any churrascaria."],
+  ["brigadeiro","Brigadeiro","🍫","Fudgy chocolate truffles rolled in sprinkles, at every birthday party."]]],
+ ["PE","Peru","🇵🇪",[
+  ["ceviche","Ceviche","🐟","Raw fish cured in lime juice with chilli and red onion, eaten at lunchtime.","Lima"],
+  ["lomo","Lomo saltado","🥩","Beef stir-fried with onions and tomatoes, served with chips and rice."],
+  ["aji","Ají de gallina","🍗","Shredded chicken in a creamy yellow chilli sauce."],
+  ["causa","Causa limeña","🥔","Layered cold potato terrine with yellow chilli and chicken or tuna.","Lima"],
+  ["anticuchos","Anticuchos","🍢","Grilled skewers of marinated beef heart, sold from street carts."],
+  ["pisco","Pisco sour","🍸","Peru's grape brandy with lime, sugar, egg white and bitters."]]],
+ ["CL","Chile","🇨🇱",[
+  ["empanadapino","Empanada de pino","🥟","Baked pastry filled with beef, onion, olive and hard-boiled egg."],
+  ["pasteldechoclo","Pastel de choclo","🌽","Beef and chicken baked under a sweet corn crust."],
+  ["completo","Completo","🌭","A hot dog loaded with avocado, tomato and mayonnaise."],
+  ["cazuela","Cazuela","🍲","Hearty broth with beef or chicken, potato, squash and corn on the cob."],
+  ["chorrillana","Chorrillana","🍟","A shared mountain of chips with steak, onions and fried eggs.","Valparaíso"],
+  ["sopaipillas","Sopaipillas","🫓","Fried pumpkin dough rounds, with pebre salsa or syrup on rainy days."]]],
+ ["CO","Colombia","🇨🇴",[
+  ["bandeja","Bandeja paisa","🍳","Beans, rice, ground beef, chorizo, pork crackling, egg, plantain and avocado on one plate.","Antioquia"],
+  ["arepa","Arepas","🫓","Grilled corn cakes, plain or stuffed with cheese, eaten at any meal."],
+  ["ajiaco","Ajiaco","🥣","Chicken and three-potato soup with guascas herb, capers and cream.","Bogotá"],
+  ["empanadascol","Empanadas","🥟","Crisp cornmeal pastries with meat and potato, with ají sauce."],
+  ["lechona","Lechona","🐖","Whole pig stuffed with rice and peas and roasted for hours.","Tolima"],
+  ["bunuelos","Buñuelos","🍩","Fried cheese dough balls, especially at Christmas."]]],
+ ["UY","Uruguay","🇺🇾",[
+  ["chivito","Chivito","🥪","A huge steak sandwich with ham, cheese, egg, bacon and salad."],
+  ["asadouy","Asado","🥩","Uruguay's barbecue, cooked over wood embers rather than charcoal."],
+  ["tortafrita","Torta frita","🫓","Fried dough rounds, traditionally made on rainy days with mate."],
+  ["alfajoruy","Alfajores","🍪","Biscuit sandwiches filled with dulce de leche."],
+  ["mate","Mate","🧉","Bitter herbal tea shared from a gourd. You'll see people carrying a thermos everywhere."],
+  ["faina","Fainá","🍕","Thin chickpea flatbread, eaten on top of a slice of pizza."]]],
+ ["EC","Ecuador","🇪🇨",[
+  ["encebollado","Encebollado","🐟","Tuna and cassava soup with pickled onion, a coastal breakfast and hangover cure.","The coast"],
+  ["cevichecam","Ceviche de camarón","🦐","Prawn ceviche in a tangy tomato and citrus broth, with popcorn or plantain chips."],
+  ["locro","Locro de papa","🥣","Creamy potato and cheese soup with avocado.","The Andes"],
+  ["hornado","Hornado","🐖","Slow-roasted pork with llapingachos and salad, from market stalls.","The Andes"],
+  ["llapingachos","Llapingachos","🥔","Cheese-stuffed potato patties with peanut sauce."],
+  ["bolon","Bolón de verde","🍌","Mashed green plantain balls with cheese or pork crackling, a breakfast staple."]]],
+ ["BO","Bolivia","🇧🇴",[
+  ["saltena","Salteñas","🥟","Baked pastries with a juicy, slightly sweet stew inside. A mid-morning snack."],
+  ["sopamani","Sopa de maní","🥣","Peanut soup with beef, vegetables and crispy chips on top."],
+  ["silpancho","Silpancho","🍳","Thin breaded beef over rice and potatoes, topped with fried eggs.","Cochabamba"],
+  ["piquemacho","Pique macho","🍖","Beef, sausage, chips, onions and chillies, made for sharing.","Cochabamba"],
+  ["api","Api con pastel","🥤","Hot purple-corn drink with a cheese-filled fried pastry."],
+  ["cunape","Cuñapé","🧀","Small cheese bread rolls made with cassava starch.","Santa Cruz"]]],
+ ["VE","Venezuela","🇻🇪",[
+  ["arepave","Arepas","🫓","Split corn cakes stuffed with fillings like reina pepiada (chicken and avocado)."],
+  ["pabellon","Pabellón criollo","🍛","Shredded beef, black beans, rice and fried plantain."],
+  ["cachapa","Cachapas","🌽","Sweet corn pancakes folded around soft white cheese."],
+  ["tequenos","Tequeños","🧀","Cheese sticks wrapped in dough and fried, at every party."],
+  ["hallacas","Hallacas","🫔","Corn dough parcels with a rich stew inside, wrapped in banana leaves for Christmas."],
+  ["empanadave","Empanadas","🥟","Crisp cornmeal turnovers with cheese, beef or shark (cazón)."]]],
+ ["US","United States","🇺🇸",[
+  ["brisket","Smoked brisket","🍖","Beef smoked low and slow over post oak for hours, sold by the pound.","Texas"],
+  ["nypizza","New York slice","🍕","A thin, foldable slice from a counter joint, eaten standing up.","New York"],
+  ["cheesesteak","Philly cheesesteak","🥪","Thin-sliced griddled beef with onions and melted cheese in a long roll.","Philadelphia"],
+  ["lobsterroll","Lobster roll","🦞","Chunks of lobster in a toasted, buttered split-top bun.","New England"],
+  ["gumbo","Gumbo","🍲","Thick stew built on a dark roux, with sausage, chicken or seafood over rice.","Louisiana"],
+  ["wings","Buffalo wings","🍗","Fried chicken wings in hot sauce and butter, with blue cheese dip and celery.","Buffalo"],
+  ["deepdish","Deep-dish pizza","🥧","A tall, buttery crust filled with cheese and topped with chunky tomato sauce.","Chicago"],
+  ["biscuits","Biscuits and gravy","🍞","Fluffy scone-like biscuits under creamy sausage gravy. A Southern breakfast.","The South"]]],
+ ["CA","Canada","🇨🇦",[
+  ["poutine","Poutine","🍟","Chips topped with squeaky cheese curds and hot gravy.","Quebec"],
+  ["smokedmeat","Montreal smoked meat","🥪","Brined, spiced and smoked beef brisket piled into rye bread with mustard.","Montreal"],
+  ["buttertart","Butter tarts","🥧","Small pastry tarts with a gooey butter, sugar and egg filling.","Ontario"],
+  ["nanaimo","Nanaimo bars","🍫","No-bake bars of chocolate crumb base, custard buttercream and chocolate.","British Columbia"],
+  ["peameal","Peameal bacon sandwich","🥓","Cornmeal-crusted back bacon in a soft roll.","Toronto"],
+  ["tire","Maple taffy on snow","🍁","Hot maple syrup poured onto snow and rolled onto a stick. A spring sugar-shack treat.","Quebec"]]],
+ ["AU","Australia","🇦🇺",[
+  ["meatpie","Meat pie","🥧","Hand-held minced beef pie with tomato sauce, a staple at the footy and the bakery."],
+  ["sausagesizzle","Sausage sizzle","🌭","A barbecued sausage on a slice of white bread with onions and sauce, often at a fundraiser."],
+  ["barramundi","Barramundi","🐟","Mild, meaty fish, grilled or battered. Best near where it's caught in the north."],
+  ["lamington","Lamington","🧁","Sponge squares dipped in chocolate and rolled in desiccated coconut."],
+  ["pavlova","Pavlova","🍓","Crisp meringue with a soft middle, topped with cream and fruit. New Zealand claims it too."],
+  ["vegemite","Vegemite on toast","🍞","A thin scrape of salty yeast spread on buttered toast. Thin is the key word."]]],
+ ["MA","Morocco","🇲🇦",[
+  ["tagine","Tagine","🍲","Slow-cooked stew of lamb or chicken with preserved lemon, olives, prunes or apricots."],
+  ["couscous","Couscous","🥘","Steamed semolina with vegetables and meat, traditionally shared on Fridays."],
+  ["pastilla","Pastilla","🥧","Flaky pastry pie of pigeon or chicken, almonds and cinnamon, dusted with sugar.","Fez"],
+  ["harira","Harira","🥣","Tomato, lentil and chickpea soup, the dish that breaks the fast in Ramadan."],
+  ["minttea","Mint tea","🍵","Green tea with fresh mint and plenty of sugar, poured from a height."],
+  ["msemen","Msemen","🫓","Square, flaky pan-fried flatbread with honey or butter at breakfast."]]],
+ ["ZA","South Africa","🇿🇦",[
+  ["braai","Braai","🔥","The South African barbecue: boerewors, chops and sosaties over wood coals."],
+  ["bunnychow","Bunny chow","🍞","A hollowed-out loaf filled with curry.","Durban"],
+  ["bobotie","Bobotie","🍲","Spiced minced meat baked under an egg custard, with yellow rice.","Cape Malay"],
+  ["biltong","Biltong","🥩","Air-dried, spiced beef, sold everywhere from butchers to petrol stations."],
+  ["malva","Malva pudding","🍮","Sticky, spongy apricot-jam pudding soaked in a creamy sauce."],
+  ["gatsby","Gatsby","🥪","A huge long roll stuffed with chips, meat and sauce, made for sharing.","Cape Town"]]]
+].forEach(([code,name,flag,ds]) => COUNTRIES.push({code, name, flag, dishes:ds.map(([slug,dn,emoji,desc,region]) => ({id:code.toLowerCase()+"-"+slug, name:dn, emoji, desc, country:code, region}))}));
+COUNTRIES.sort((a,b) => a.name.localeCompare(b.name));
+const CONTINENT = c => ["JP","TH","VN","IN"].includes(c) ? "Asia" : ["US","CA","MX"].includes(c) ? "North America"
+  : ["AR","BR","PE","CL","CO","UY","EC","BO","VE"].includes(c) ? "South America"
+  : ["MA","ZA"].includes(c) ? "Africa" : ["AU"].includes(c) ? "Oceania" : "Europe";
+const CONTINENTS = ["Europe","North America","South America","Asia","Africa","Oceania"];
+const C = {}, D = {};
+/* drinks on the must-try lists get "drunk" wording instead of "eaten" */
+const DRINKS = new Set(["de-kolsch","pe-pisco","uy-mate","ma-minttea","vn-eggcoffee"]);
+const isDrink = id => DRINKS.has(id);
+COUNTRIES.forEach(c => { C[c.code] = c; c.dishes.forEach(d => D[d.id] = d); });
+[["kaviar","Kölscher Kaviar","🧅","Not caviar at all: Flönz (blood sausage) on a rye roll with raw onion and mustard.","Cologne"],
+ ["weckmann","Weckmann","🍞","A sweet yeast-dough man holding a clay pipe, sold by Rhineland bakeries around St Martin's Day (11 November).","Rhineland"]]
+ .forEach(([s,n,e,desc,region]) => { const d = {id:"de-"+s, name:n, emoji:e, desc, country:"DE", region}; C.DE.dishes.push(d); D[d.id] = d; });
+
+/* ---------- Country basics (general knowledge, not yet checked against local sources) ---------- */
+const BASICS = {
+ GB:{title:"Eating in the UK",
+  intro:"British food is built around a few everyday institutions: the caff breakfast, the Sunday roast, the chippy and the pub. The basics are the same everywhere, but every city has its own versions and specialities. That's what the city guides are for.",
+  habits:[
+   ["Tea comes with milk","Ask for tea and you'll get strong black tea with milk. Builder's tea means strong, with sugar."],
+   ["Breakfast out is a weekend thing","On weekdays most people have toast or cereal at home. A cooked breakfast in a caff is a Saturday ritual, or a hangover cure."],
+   ["Book the Sunday roast","Pubs serve roasts from about midday to 5pm on Sundays and the good ones sell out. Book ahead or arrive early."],
+   ["Fish and chips on a Friday","Still a Friday night habit for plenty of families. Takeaway, eaten out of the paper."],
+   ["Pub kitchens close early","Many pubs stop serving food around 9pm, and earlier on Sundays."]],
+  dishes:{
+   "gb-fullenglish":{label:"What needs to be on the plate",must:["Back bacon","Pork sausages","Fried egg","Baked beans","Grilled tomato","Mushrooms","Black pudding","Toast or fried bread","Mug of tea"],note:"Hash browns are a newer addition. Plenty of people have them, plenty refuse."},
+   "gb-crumpets":{label:"How to have them",must:["Well toasted","Salted butter, lots of it","Then Marmite, honey or jam"]},
+   "gb-roast":{label:"On the plate",must:["Beef, chicken, lamb or pork","Crispy roast potatoes","Yorkshire pudding","Seasonal veg","Proper gravy"]},
+   "gb-fishchips":{label:"Order it with",must:["Salt and malt vinegar","Mushy peas","Tartare sauce, or gravy or curry sauce up north","A pickled onion, if you're brave"]},
+   "gb-hotpot":{label:"What goes in",must:["Lamb or mutton","Onions","Sliced potato on top","Pickled red cabbage on the side"]},
+   "gb-sticky":{label:"How it's served",must:["Warm, never cold","Toffee sauce poured over","Custard or vanilla ice cream"]}}},
+ DE:{title:"Eating in Germany",
+  intro:"German food changes a lot from region to region: pretzels and sausages in Bavaria, fish rolls in Hamburg, currywurst in Berlin and hearty Rhineland cooking in Cologne. What ties it together is good bread, good beer and taking your time over a meal.",
+  habits:[
+   ["Dinner is often bread","Many families eat their warm meal at lunch and have Abendbrot in the evening: bread, cheese, cold meats and pickles."],
+   ["Tap water isn't automatic","Restaurants serve bottled water. You can ask for Leitungswasser, tap water, but not everywhere will bring it."],
+   ["Tip by rounding up","Around 5 to 10 percent is normal. Tell the server the total you want to pay when they bring the bill, rather than leaving coins on the table."],
+   ["Carry some cash","Cards are now widely accepted, but plenty of small bakeries, market stalls and old-school pubs still prefer cash."],
+   ["Sundays are quiet","Supermarkets and most shops close on Sundays. Bakeries open in the morning, and Sunday afternoon is for coffee and cake."],
+   ["Coffee and cake at 3","Kaffee und Kuchen, afternoon coffee with a slice of cake, is a proper ritual, especially at weekends."]],
+  dishes:{
+   "de-currywurst":{label:"How to order it",must:["With or without skin (mit oder ohne Darm)","Curry ketchup and curry powder on top","Chips or a bread roll","A little wooden fork"]},
+   "de-bratwurst":{label:"How it's served",must:["Grilled, not boiled","In a crusty roll","Mustard, not ketchup"]},
+   "de-brezel":{label:"How to spot a good one",must:["Dark, shiny crust","Soft and chewy inside","Coarse salt","Try a Butterbrezel, split and buttered"]},
+   "de-sauerbraten":{label:"On the plate",must:["Beef marinated for several days","Sweet-sour gravy, often with raisins","Red cabbage","Potato dumplings"]}}},
+ IT:{title:"Eating in Italy",
+  intro:"Italian food is regional first and national second. Ask for 'Italian food' and you'll get a shrug; ask for Roman, Neapolitan or Sicilian food and you'll get an opinion. A few habits hold everywhere, though.",
+  habits:[
+   ["Cappuccino is for mornings","Milky coffee after about 11am marks you out as a visitor. After lunch, it's an espresso at the bar."],
+   ["Breakfast is standing up","A cornetto and a coffee at the bar, done in five minutes. Sitting at a table can cost more."],
+   ["Lunch from 1, dinner from 8","A restaurant that's full at 7pm is usually full of visitors."],
+   ["The coperto is normal","A small cover charge per person for bread and the table is standard. Tipping is optional."],
+   ["Pasta is a first course","The traditional order is primo then secondo, though few people eat both at lunch now."]],
+  dishes:{
+   "it-gelato":{label:"How to spot a good one",must:["Muted, natural colours","Covered metal tubs","Two flavours in a cup"]},
+   "it-pizza":{label:"What makes it Neapolitan",must:["Soft, blistered crust","San Marzano tomato","Fior di latte or buffalo mozzarella","Basil and olive oil"]},
+   "it-tiramisu":{label:"What goes in",must:["Savoiardi","Mascarpone","Espresso","Cocoa"]}}}
+};
+
+/* ---------- Researched city guides ---------- */
+const SRC = {
+ kt:{t:"KölnTourismus magazine: 8 Brauhäuser für chilligen Kölsch-Genuss (March 2026)", u:"https://magazin.koelntourismus.de/kulinarik/alternative-brauhaeuser/"},
+ gt:{t:"Geheimtipp Köln: Die schönsten Brauhäuser in Köln", u:"https://geheimtipp-koeln.de/geheimtipp/die-schoensten-brauhaeuser-in-koeln-unser-brauhaus-guide/"},
+ kk:{t:"Mit Vergnügen Köln: 11 Restaurants mit kölscher Kost", u:"https://koeln.mitvergnuegen.com/2024/koelsche-kost/"},
+ rk:{t:"Mit Vergnügen Köln: 11 Orte für Reibekuchen (2024)", u:"https://koeln.mitvergnuegen.com/2024/reibekuchen/"},
+ sb:{t:"koeln.de: Rheinischer Sauerbraten", u:"https://www.koeln.de/tourismus/ll/9-dinge-die-man-in-koeln-gegessen-haben-sollte/rheinischer-sauerbraten/"},
+ cb:{t:"Cologne City Breaks: Inside Cologne's Kölsch ritual (2026)", u:"https://www.colognecitybreaks.com/de/city/cologne/articles/the-system-in-the-glass-inside-cologne-s-kolsch-ritual"},
+ dn:{t:"Mit Vergnügen Köln: 11 Orte für richtig leckeren Döner (2026)", u:"https://koeln.mitvergnuegen.com/2026/doener-essen"},
+ rm:{t:"Retired Martin: Tea at Lommi's (March 2026)", u:"https://retiredmartin.com/2026/03/22/whats-mainzer-in-paffgen-kolsch-eingelegt-dad-tea-at-lommis/comment-page-1"}
+};
+const SRC_ORDER = Object.keys(SRC);
+const P = (n, addr, area, note, src) => ({n, addr, area, note, src});
+const GUIDES = {
+ DE:{city:"Cologne", checked:"October 2026",
+  intro:"Cologne's food culture lives in the Brauhaus: long wooden tables, Rhineland home cooking and Kölsch in small glasses that keep coming. The big houses next to the cathedral are fine, but the ones locals rate are a few minutes away, in the Veedel (neighbourhoods): the Friesenviertel, Kunibertsviertel, Nippes, Sülz, Ehrenfeld and Deutz.",
+  rules:{src:["cb"], items:[
+   "Kölsch comes in a 0.2 litre glass called a Stange, so every glass is cold and fresh.",
+   "The waiter, the Köbes, doesn't take beer orders. He swaps your empty glass for a full one until you stop him.",
+   "Each glass gets a pencil mark on your beer mat. That's your bill.",
+   "To stop, put the beer mat flat on top of your glass.",
+   "Pay the same Köbes at the end. Cash is easiest, and some older houses only take cash.",
+   "Tip by rounding up, or a euro or two per round. Expect roughly €2.20 to €2.40 a glass."]},
+  habits:[
+   ["Eat in the Veedel, not by the Dom","Locals tend to drink in neighbourhood houses like Päffgen in the Friesenviertel, Max Stark in the Kunibertsviertel or Haus Unkelbach in Sülz rather than the giants by the cathedral.",["gt","kt"]],
+   ["Reibekuchen have their day","Many Brauhäuser only fry Reibekuchen on one day of the week. See the planner below before you go.",["rk"]],
+   ["Queue for Lommi","Lommerzheim in Deutz takes no reservations. People queue outside before it opens at 11:00 for lunch and again at 16:30.",["rm","cb"]],
+   ["Sauerbraten is usually beef now","Classic Rhineland Sauerbraten was made with horse meat. Most Cologne restaurants now use beef because many guests are wary of horse.",["sb"]],
+   ["Carnival starts on 11 November","The carnival season opens at 11:11 on 11 November, and the Brauhäuser fill up from the morning. The main street carnival is the week before Lent.",[]],
+   ["Weckmann season","From around St Martin's Day on 11 November, bakeries sell Weckmänner, sweet dough figures holding a little clay pipe.",[]]],
+  dishes:[
+   {dish:"de-himmel", note:"Mashed potato and apple, topped with fried Flönz (blood sausage) and onions. On almost every Brauhaus menu.", places:[
+     P("Hellers Brauhaus","Roonstraße 33","Kwartier Latäng","Family-run for over 30 years and popular with regulars and students. Also has plenty of vegan dishes.",["kt"]),
+     P("Leev Marie","Falkenburgstraße 21","Lindenthal","A roughly 200-year-old inn, restored. The butcher-trained owner makes the Flönz in house.",["kt"]),
+     P("Kölsch-Kultur","Petersbergstraße 1","Sülz-Klettenberg","Neighbourhood place with a terrace, also good for Sauerbraten.",["kk"]),
+     P("Brauhaus Pütz","Engelbertstraße 67","Near the Belgian Quarter","Younger crowd and Mühlen Kölsch, with seasonal dishes alongside the classics.",["gt","kt"])]},
+   {dish:"de-halvehahn", note:"Half a rye roll with a thick slice of aged cheese, mustard and onion. No chicken involved.", places:[
+     P("Em Golde Kappes","Neusser Straße 295","Nippes","Open since 1913. The Halve Hahn uses Holländer cheese aged in the house's own cellar.",["kk"]),
+     P("Hellers Brauhaus","Roonstraße 33","Kwartier Latäng","Halver Hahn and Himmel un Ääd among the classics.",["kt"])]},
+   {dish:"de-kaviar", note:"Blood sausage on a rye roll with raw onion. A Brauhaus snack to go with Kölsch.", places:[
+     P("Haus Unkelbach","Luxemburger Straße 260","Sülz","A neighbourhood institution since 1930, serving Reissdorf Kölsch, with a bowling lane and a beer garden.",["kt","gt"])]},
+   {dish:"de-kolsch", note:"Each Brauhaus pours one brand. These are the ones local writers single out.", places:[
+     P("Brauhaus Päffgen","Friesenstraße 64","Friesenviertel","Still brewed in the house and poured unfiltered from the wooden cask. Small and traditional; prefers cash.",["gt","cb"]),
+     P("Lommerzheim","Siegesstraße 18","Deutz","Päffgen Kölsch and famously huge pork chops. No reservations: queue before 11:00 or 16:30.",["gt","rm","cb"]),
+     P("Braustelle","Christianstraße 2","Ehrenfeld","Cologne's smallest brewery, with its own unfiltered Helios. Craft beer rather than the traditional ritual.",["kt","cb"]),
+     P("Brauhaus Pütz","Engelbertstraße 67","Near the Belgian Quarter","Sit in the Schwemme around the taps and watch the Köbes at work.",["kt","cb"])]},
+   {dish:"de-sauerbraten", note:"Beef marinated for days, braised in a sweet-sour sauce with raisins. Served with potato dumplings and apple sauce or red cabbage.", places:[
+     P("Brauerei zur Malzmühle","Heumarkt 6","Altstadt","Known for its Sauerbraten with dumplings and apple compote. Cologne's second-oldest brewery.",["kk"]),
+     P("Haus Töller","Weyerstraße 96","Innenstadt","Classic Sauerbraten and Hämmchen in a building first mentioned in 1343.",["kk"]),
+     P("Max Stark","Unter Kahlenhausen 47","Kunibertsviertel","Loud, full and very local, with Päffgen Kölsch and big portions. Book ahead.",["gt","kk"]),
+     P("Brauhaus Quetsch","Hauptstraße 7","Rodenkirchen","Terrace on the Rhine with a view back to the cathedral.",["kt"])]},
+   {dish:"de-doner", note:"Cologne has a big Turkish community. Keupstraße in Mülheim is its best-known Turkish high street.", places:[
+     P("Mevlana","Keupstraße 47–49","Mülheim","On Keupstraße. Döner plus charcoal-grilled meat and Tas Kebap.",["dn"]),
+     P("Oruc Kebap","Heinsbergstraße 1","Zülpicher Viertel","Open since 1988, with bread baked in house. Open until 3am on Fridays and Saturdays.",["dn"]),
+     P("Deli Kebap","Neusser Straße 81","Agnesviertel","Family-recipe seasoning, with lamb and veal spits carved fresh each day.",["dn"]),
+     P("Kebapland","Venloer Straße 385","Ehrenfeld","Not classic Döner: charcoal-grilled skewers in fluffy bread. Expect a queue.",["dn"])]}],
+  reibekuchen:{src:["rk"], note:"Days come from a 2024 roundup, so check before you go.", days:[
+   ["Mon",[["Em Golde Kappes","Nippes"],["Dellbrücker Schlemmerhüsje","Dellbrück, from 18:00, 60+ toppings"]]],
+   ["Tue",[["Max Stark","Kunibertsviertel, from 17:00"],["Haus Unkelbach","Sülz"],["Dellbrücker Schlemmerhüsje","from 18:00"]]],
+   ["Wed",[["Brauhaus Reissdorf am Griechenmarkt","Kleiner Griechenmarkt 40"],["Rievkoochebud","Salzgasse 6, Altstadt, 12–20"]]],
+   ["Thu",[["Rievkoochebud","12–20"],["Dellbrücker Schlemmerhüsje","from 18:00"]]],
+   ["Fri",[["Haus Töller","Weyerstraße 96, 17–20"],["Brauhaus Quetsch","Rodenkirchen"],["Zimmermann's Reibekuchen","stand at Rhöndorfer Straße 17, Sülz, 11–17"],["Rievkoochebud","12–20"],["Dellbrücker Schlemmerhüsje","from 18:00"]]],
+   ["Sat",[["Rievkoochebud","12–20"]]],
+   ["Sun",[["Rievkoochebud","12–18"]]]]},
+  more:[
+   {h:"More Brauhäuser away from the cathedral", places:[
+     P("Bier- und Weinhaus Vogel","Eigelstein 74","Eigelstein","Small, no music and fair prices. Lots of conversation with Cologne regulars.",["gt"]),
+     P("Moselstübchen","Landmannstraße 3","Neuehrenfeld","Around 60 years old, dark wood and dim light. Most dishes come in vegan versions at no extra cost.",["kt","kk"]),
+     P("Herzblatt","Simrockstraße 2","Ehrenfeld","In a former brewery, with lighter takes on the classics. Try the potato waffles.",["kt"]),
+     P("Johann Schäfer","Elsaßstraße 6","Südstadt","Modern Brauhaus cooking that uses the whole animal and regional vegetables.",["gt"])]},
+   {h:"The classics by the cathedral", places:[
+     P("Brauhaus Früh am Dom","","Altstadt","The classic first stop. Big, and copes with walk-ins and groups.",["cb"]),
+     P("Peters Brauhaus","","Altstadt","The best interior, with a stained-glass ceiling. Takes reservations.",["cb"]),
+     P("Brauhaus Sion","","Altstadt","Spacious and reliable when everywhere else is full.",["cb"])]}]}
+};
+
+/* ---------- State (Supabase: logins, meals, likes, photos) ---------- */
+const CFG = window.OPP_CONFIG || {};
+const configured = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && !/YOUR-/.test(CFG.supabaseUrl + CFG.supabaseAnonKey));
+const sb = window.supabase && configured ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
+let mode = "connecting";   /* connecting | setup | signedout | notmember | shared */
+let me = null, myEmail = "", isOwner = false, authBusy = false, authMsg = "", authView = "signin", askedNick = false;
+let MEALS = [], PEOPLE = {}, MEMBERS = [];
+const canWrite = () => mode === "shared";
+const pubUrl = path => path && sb ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : "";
+const ownUrl = u => typeof u === "string" && !!CFG.supabaseUrl && u.indexOf(CFG.supabaseUrl) === 0;
+
+function connect(){
+  if (!sb){ mode = "setup"; render(); return; }
+  sb.auth.onAuthStateChange((event, session) => {
+    /* never await Supabase calls inside this callback; hand off instead */
+    if (event === "PASSWORD_RECOVERY"){ setTimeout(() => { startSession(session); askNewPassword(); }, 0); return; }
+    if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => startSession(session), 0);
+  });
+}
+let liveChannel = null, sessionFor = null;
+async function startSession(session){
+  const uid = session && session.user ? session.user.id : null;
+  if (uid && uid === sessionFor && mode === "shared") return;
+  sessionFor = uid;
+  if (liveChannel){ sb.removeChannel(liveChannel); liveChannel = null; }
+  if (!uid){ me = null; myEmail = ""; MEALS = []; PEOPLE = {}; MEMBERS = []; mode = "signedout"; authView = "signin"; authMsg = ""; stack = [{v:"feed"}]; render(); return; }
+  me = uid; myEmail = (session.user.email || "").toLowerCase(); mode = "connecting"; render();
+  const mem = await sb.from("members").select("email,is_admin");
+  if (mem.error || !(mem.data || []).some(x => x.email.toLowerCase() === myEmail)){ mode = "notmember"; render(); return; }
+  MEMBERS = mem.data; isOwner = MEMBERS.some(x => x.email.toLowerCase() === myEmail && x.is_admin);
+  await sb.from("profiles").upsert({id:me}, {onConflict:"id", ignoreDuplicates:true});
+  mode = "shared";
+  await refresh();
+  liveChannel = sb.channel("group-live")
+    .on("postgres_changes", {event:"*", schema:"public", table:"meals"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"likes"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"profiles"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"members"}, scheduleRefresh)
+    .subscribe();
+  if (!(PEOPLE[me] && PEOPLE[me].nick) && !askedNick){ askedNick = true; askNick(); }
+}
+let refreshT = null;
+function scheduleRefresh(){ clearTimeout(refreshT); refreshT = setTimeout(refresh, 300); }
+async function refresh(){
+  if (mode !== "shared") return;
+  const [m, p, l, mem] = await Promise.all([
+    sb.from("meals").select("*").order("created_at", {ascending:false}).limit(3000),
+    sb.from("profiles").select("*"),
+    sb.from("likes").select("meal_id,user_id"),
+    sb.from("members").select("email,is_admin").order("email")]);
+  if (m.error || p.error){ toast("Couldn't load your group's meals. Check your connection and reload."); return; }
+  const likes = {};
+  (l.data || []).forEach(x => { (likes[x.meal_id] = likes[x.meal_id] || {})[x.user_id] = true; });
+  MEALS = m.data.map(r => ({id:r.id, uid:r.user_id, dish:r.dish, custom:r.custom || "", country:r.country, date:r.date, place:r.place || "", caption:r.caption || "",
+    ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
+    photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), likes:likes[r.id] || {}, created:r.created_at}));
+  PEOPLE = {};
+  p.data.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path}; });
+  if (!mem.error) MEMBERS = mem.data;
+  render();
+}
+const nameOf = uid => (PEOPLE[uid] && PEOPLE[uid].nick) || (uid === me ? "You" : "A friend");
+const shortName = uid => uid === me ? "You" : nameOf(uid).split(" ")[0];
+function avatar(uid, size){
+  const cls = size ? " " + size : "", own = PEOPLE[uid] && PEOPLE[uid].photo;
+  if (ownUrl(own)) return '<img class="av-img'+cls+'" src="'+esc(own)+'" alt="">';
+  const n = nameOf(uid), ini = n === "You" ? "Me" : n.split(" ").map(w => w[0]).join("").slice(0,2);
+  return '<span class="av'+cls+'" style="--h:'+hue(uid || "x")+'">'+esc(ini)+'</span>';
+}
+const savedOf = uid => (PEOPLE[uid] && Array.isArray(PEOPLE[uid].saved)) ? PEOPLE[uid].saved : [];
+const mealsOf = uid => MEALS.filter(m => m.uid === uid).sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.created || "").localeCompare(a.created || ""));
+function triedMap(uid){ const t = {}; mealsOf(uid).forEach(m => { if (m.dish && D[m.dish] && (!t[m.dish] || m.date < t[m.dish])) t[m.dish] = m.date; }); return t; }
+function statsFor(uid){ const ms = mealsOf(uid), t = triedMap(uid); return {photos:ms.length, dishes:Object.keys(t).length, countries:new Set(ms.map(m => m.country)).size, tried:t}; }
+const likeCount = m => Object.values(m.likes || {}).filter(Boolean).length;
+const friends = () => Object.keys(PEOPLE).filter(id => id !== me);
+
+/* ---------- Writes ---------- */
+function writeFailed(e){
+  console.error(e);
+  const msg = (e && (e.message || e.error_description)) || "";
+  if (/row-level security|permission|not allowed/i.test(msg)) toast("You don't have permission to do that.");
+  else if (/exceeded|quota|too large|payload/i.test(msg)) toast("Storage is full or the photo is too big. Try a smaller photo.");
+  else toast("That didn't save. Check your connection and try again.");
+}
+const newId = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, () => (Math.random() * 16 | 0).toString(16));
+async function uploadPhoto(path, blob){
+  const {error} = await sb.storage.from("photos").upload(path, blob, {contentType:"image/jpeg", cacheControl:"31536000", upsert:false});
+  if (error) throw error;
+  return path;
+}
+const removeFiles = paths => { const ps = paths.filter(Boolean); if (ps.length) sb.storage.from("photos").remove(ps).catch(() => {}); };
+async function addMeal(m, blobs){
+  try {
+    const id = newId(), base = me + "/" + id + "-" + Date.now().toString(36);
+    const thumb_path = await uploadPhoto(base + "-t.jpg", blobs.thumb);
+    const photo_path = blobs.full ? await uploadPhoto(base + ".jpg", blobs.full) : null;
+    const {error} = await sb.from("meals").insert({id, user_id:me, dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption,
+      ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, photo_path, thumb_path});
+    if (error){ removeFiles([thumb_path, photo_path]); throw error; }
+    await refresh(); return true;
+  } catch(e){ writeFailed(e); return false; }
+}
+async function toggleLike(m){
+  const on = !(m.likes && m.likes[me]);
+  m.likes = Object.assign({}, m.likes, {[me]:on}); render();
+  const q = on ? sb.from("likes").insert({meal_id:m.id, user_id:me}) : sb.from("likes").delete().eq("meal_id", m.id).eq("user_id", me);
+  const {error} = await q; if (error) writeFailed(error);
+  scheduleRefresh();
+}
+async function deleteMeal(m){
+  const {error} = await sb.from("meals").delete().eq("id", m.id);
+  if (error){ writeFailed(error); return; }
+  removeFiles([m.photo_path, m.thumb_path]); await refresh();
+}
+async function setPerson(patch){
+  const row = {};
+  if ("nick" in patch) row.nick = patch.nick;
+  if ("saved" in patch) row.saved = patch.saved;
+  Object.assign(PEOPLE[me] = PEOPLE[me] || {nick:"", saved:[]}, patch); render();
+  const {error} = await sb.from("profiles").update(row).eq("id", me);
+  if (error) writeFailed(error); else scheduleRefresh();
+}
+async function setAvatar(blob){
+  const old = PEOPLE[me] && PEOPLE[me].photo_path;
+  try {
+    const path = blob ? await uploadPhoto(me + "/avatar-" + Date.now().toString(36) + ".jpg", blob) : null;
+    const {error} = await sb.from("profiles").update({photo_path:path}).eq("id", me);
+    if (error) throw error;
+    if (old) removeFiles([old]);
+    await refresh(); return true;
+  } catch(e){ writeFailed(e); return false; }
+}
+async function addMember(email){
+  email = (email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("That doesn't look like an email address."); return; }
+  const {error} = await sb.from("members").insert({email});
+  if (error){ toast(/duplicate|unique/i.test(error.message) ? "That email is already in the group." : "Couldn't add that email. Only group admins can add people."); return; }
+  toast(email + " can now create an account."); await refresh();
+}
+async function removeMember(email){
+  const {error} = await sb.from("members").delete().eq("email", email);
+  if (error){ writeFailed(error); return; }
+  toast(email + " removed from the group."); await refresh();
+}
+
+/* ---------- Signing in ---------- */
+function viewAuth(){
+  if (mode === "setup") return '<div class="stack auth"><div class="empty-state"><p><b style="color:var(--fg)">Not connected yet.</b></p><p>This site still needs its Supabase details in config.js.</p></div></div>';
+  if (mode === "notmember") return '<div class="stack auth"><div class="auth-card"><h2>Not in the group yet</h2><p>You\'re signed in as <b>'+esc(myEmail)+'</b>, but that email hasn\'t been added to the group.</p><p class="hint">Ask whoever set up your group to add it in their Passport, under Group members. Then sign in again.</p><button class="btn" data-act="sign-out">Sign out</button></div></div>';
+  const up = authView === "signup", forgot = authView === "forgot";
+  return '<div class="stack auth"><div class="auth-hero"><span class="wordmark"><span class="dot"></span>Our Plate Passport</span><p>Must-try dishes around the world, and your group\'s meal photos.</p></div>'
+   + '<form class="auth-card" id="auth-form" novalidate><h2>'+(forgot ? 'Reset your password' : up ? 'Create your account' : 'Sign in')+'</h2>'
+   + (up ? '<p class="hint">Use the email address your group added for you.</p>' : '')
+   + '<div class="field"><label class="label" for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" required></div>'
+   + (forgot ? '' : '<div class="field"><label class="label" for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="'+(up ? 'new-password' : 'current-password')+'" minlength="8" required>'+(up ? '<p class="hint">At least 8 characters.</p>' : '')+'</div>')
+   + (authMsg ? '<p class="auth-msg" role="alert">'+esc(authMsg)+'</p>' : '')
+   + '<button class="btn primary" type="submit"'+(authBusy ? ' disabled' : '')+'>'+(authBusy ? 'One moment…' : forgot ? 'Send reset link' : up ? 'Create account' : 'Sign in')+'</button>'
+   + '<p class="auth-switch">'+(forgot ? '<a href="#" data-act="auth-view" data-id="signin">Back to sign in</a>'
+       : up ? 'Already have an account? <a href="#" data-act="auth-view" data-id="signin">Sign in</a>'
+       : 'New here? <a href="#" data-act="auth-view" data-id="signup">Create an account</a> · <a href="#" data-act="auth-view" data-id="forgot">Forgot password?</a>')+'</p></form></div>';
+}
+async function submitAuth(){
+  const email = ($("#a-email").value || "").trim(), passEl = $("#a-pass"), pass = passEl ? passEl.value : "";
+  if (!email){ authMsg = "Enter your email address."; render(); return; }
+  authBusy = true; authMsg = ""; render(); $("#a-email").value = email;
+  let res;
+  if (authView === "forgot") res = await sb.auth.resetPasswordForEmail(email, {redirectTo:location.origin + location.pathname});
+  else if (authView === "signup") res = await sb.auth.signUp({email, password:pass});
+  else res = await sb.auth.signInWithPassword({email, password:pass});
+  authBusy = false;
+  const err = res.error;
+  if (err){
+    const m = err.message || "";
+    authMsg = /Database error saving new user|not been added/i.test(m) ? "That email hasn't been added to the group yet. Ask whoever runs your group to add it."
+      : /Invalid login credentials/i.test(m) ? "That email and password don't match."
+      : /already registered/i.test(m) ? "There's already an account with that email. Sign in instead."
+      : /Password should be/i.test(m) ? "Use a password of at least 8 characters."
+      : /rate limit|too many/i.test(m) ? "Too many attempts. Wait a few minutes and try again."
+      : m || "Something went wrong. Try again.";
+  } else if (authView === "forgot") authMsg = "If that email is in the group, a reset link is on its way.";
+  else if (authView === "signup" && !(res.data && res.data.session)) authMsg = "Check your email to confirm your account, then sign in.";
+  render();
+  const e2 = $("#a-email"); if (e2) e2.value = email;
+}
+function askNick(){
+  openSheet('<div class="stack"><h2 style="font-size:20px">What should your friends call you?</h2><p class="hint">This is the name on your meals and passport. You can change it later.</p>'
+   + '<div class="field"><label class="label" for="nick1">Your name</label><input id="nick1" type="text" maxlength="30" autocomplete="nickname"></div>'
+   + '<button class="btn primary" data-act="save-nick1">Save</button></div>');
+}
+function askNewPassword(){
+  openSheet('<div class="stack"><h2 style="font-size:20px">Choose a new password</h2>'
+   + '<div class="field"><label class="label" for="newpass">New password</label><input id="newpass" type="password" autocomplete="new-password" minlength="8"></div>'
+   + '<button class="btn primary" data-act="save-pass">Save password</button></div>');
+}
+function membersHTML(){
+  if (!isOwner) return '';
+  return '<div class="section-h"><h2>Group members</h2><span>'+MEMBERS.length+'</span></div><section class="guide">'
+   + '<p class="hint">Only these email addresses can create an account and see the group. Add a friend, then send them this site\'s address.</p>'
+   + '<div class="mem-list">'+MEMBERS.map(x => '<div class="mem"><span>'+esc(x.email)+(x.is_admin ? ' <small>admin</small>' : '')+'</span>'
+       + (x.email.toLowerCase() === myEmail ? '' : '<button class="link-del" data-act="mem-del" data-id="'+esc(x.email)+'">Remove</button>')+'</div>').join("")+'</div>'
+   + '<div class="inline-form"><div class="field"><label class="label" for="mem-email">Add an email</label><input id="mem-email" type="email" placeholder="friend@example.com" autocomplete="off"></div><button class="btn primary" data-act="mem-add">Add</button></div></section>';
+}
+
+/* ---------- Photos ---------- */
+function loadImgRaw(blob){ return new Promise((res, rej) => { const url = URL.createObjectURL(blob), img = new Image(); img.onload = () => res({img, url}); img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("unreadable")); }; img.src = url; }); }
+/* HEIC/HEIF: Safari opens these natively; elsewhere a converter loads on demand, only the first time someone picks one */
+const HEIC_LIB = ["https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js", "https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js"];
+let heicLoading = null;
+function loadHeicLib(){
+  if (window.heic2any) return Promise.resolve(window.heic2any);
+  if (heicLoading) return heicLoading;
+  heicLoading = new Promise((res, rej) => {
+    const tryAt = i => {
+      if (i >= HEIC_LIB.length){ heicLoading = null; rej(new Error("heic-lib")); return; }
+      const sc = document.createElement("script"); sc.src = HEIC_LIB[i]; sc.async = true;
+      sc.onload = () => window.heic2any ? res(window.heic2any) : tryAt(i + 1); sc.onerror = () => tryAt(i + 1);
+      document.head.appendChild(sc);
+    };
+    tryAt(0);
+  });
+  return heicLoading;
+}
+async function looksHeic(f){
+  if (/image\/hei[cf]/i.test(f.type || "") || /\.hei[cf]$/i.test(f.name || "")) return true;
+  try { const b = new Uint8Array(await f.slice(4, 12).arrayBuffer()); return /^ftyp(heic|heix|hevc|hevx|heim|heis|mif1|msf1)/.test(String.fromCharCode.apply(null, b)); } catch(e) { return false; }
+}
+async function loadImg(file){
+  try { return await loadImgRaw(file); }
+  catch(e){
+    if (!(await looksHeic(file))) throw e;
+    toast("Converting your HEIC photo…");
+    const convert = await loadHeicLib();
+    let out = await convert({blob:file, toType:"image/jpeg", quality:0.92});
+    if (Array.isArray(out)) out = out[0];
+    return await loadImgRaw(out);
+  }
+}
+const photoError = err => toast(err && err.message === "heic-lib" ? "The HEIC converter couldn't load. Try again, or export the photo as a JPG." : "That photo couldn't be read. Try a JPG, PNG or HEIC.");
+function drawTo(img, max){ const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)); const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth*s); cv.height = Math.round(img.naturalHeight*s); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); return cv; }
+/* profile photos: square-cropped, small, stored with the person (no location data survives the re-encode) */
+async function squarePhoto(file){
+  const {img, url} = await loadImg(file);
+  const s = Math.min(img.naturalWidth, img.naturalHeight), cv = document.createElement("canvas"); cv.width = cv.height = 192;
+  cv.getContext("2d").drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 192, 192);
+  URL.revokeObjectURL(url);
+  return await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+}
+document.addEventListener("error", e => { const t = e.target; if (t && t.tagName === "IMG" && t.dataset.fb && t.getAttribute("src") !== t.dataset.fb) t.src = t.dataset.fb; }, true);
+function photoHTML(m, big){
+  const src = big && m.photo ? m.photo : m.thumb;
+  return '<span class="photo"'+(big && m.ratio === "3:4" ? ' style="aspect-ratio:3/4"' : '')+'><img src="'+esc(src)+'"'+(big && m.photo ? ' data-fb="'+esc(m.thumb)+'"' : '')+' alt="'+esc(dishName(m))+'" loading="lazy"></span>';
+}
+const dishName = m => m.dish && D[m.dish] ? D[m.dish].name : (m.custom || "Meal");
+
+/* ---------- Rendering helpers ---------- */
+const srcLinks = keys => keys && keys.length ? '<span class="srcs">Source '+keys.map(k => '<a href="'+esc(SRC[k].u)+'" target="_blank" rel="noopener" title="'+esc(SRC[k].t)+'">'+(SRC_ORDER.indexOf(k)+1)+'</a>').join("")+'</span>' : '';
+const mapURL = p => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.n + ", " + (p.addr ? p.addr + ", " : "") + "Köln");
+function placeCard(p){
+  return '<div class="place"><div class="pl-h"><b>'+esc(p.n)+'</b><a href="'+mapURL(p)+'" target="_blank" rel="noopener">Map ↗</a></div>'
+   + '<span class="addr">'+esc([p.addr, p.area].filter(Boolean).join(" · "))+'</span><p>'+esc(p.note)+'</p>'+srcLinks(p.src)+'</div>';
+}
+function facesFor(dishId){
+  const ids = Array.from(new Set(MEALS.filter(m => m.dish === dishId).map(m => m.uid))).filter(id => id !== me).slice(0,4);
+  return ids.length ? '<span class="faces">'+ids.map(id => avatar(id, "sm")).join("")+'</span>' : '';
+}
+function postCard(m){
+  const c = C[m.country] || {code:"", name:"", flag:""}, liked = !!(m.likes && m.likes[me]);
+  return '<article class="post">'
+   + '<div class="post-h"><button class="who" data-act="user" data-id="'+esc(m.uid)+'">'+avatar(m.uid)+'<span class="who-t"><b>'+esc(nameOf(m.uid))+'</b><small>'+esc(m.place || fmtDate(m.date))+'</small></span></button>'
+   + '<span class="cstamp" title="'+esc(c.name)+'">'+esc(c.code)+'</span>'
+   + (m.uid === me && canWrite() ? '<button class="icon-btn" data-act="menu" data-id="'+esc(m.id)+'" aria-label="More options">'+I.more+'</button>' : '') + '</div>'
+   + (m.dish && D[m.dish] ? '<button style="display:block;width:100%" data-act="dish" data-id="'+m.dish+'">'+photoHTML(m, true)+'</button>' : photoHTML(m, true))
+   + '<div class="post-b"><div class="acts">'
+   + '<button class="act'+(liked ? ' liked' : '')+'" data-act="like" data-id="'+esc(m.id)+'" aria-pressed="'+liked+'" aria-label="Like"'+(canWrite() ? '' : ' disabled')+'>'+I.heart+'<span class="mono">'+likeCount(m)+'</span></button>'
+   + '<span class="date">'+(priceText(m.price) ? esc(priceText(m.price))+' · ' : '')+fmtDate(m.date)+'</span></div>'
+   + '<p>'+(m.dish && D[m.dish] ? '<a href="#" class="dish-link" data-act="dish" data-id="'+m.dish+'">'+esc(D[m.dish].name)+'</a>' : '<span class="dish-link">'+esc(m.custom)+'</span>')
+   + (c.code ? ' <span class="where">in <a href="#" data-act="country" data-id="'+c.code+'">'+c.flag+' '+esc(c.name)+'</a></span>' : '')+'</p>'
+   + (+m.rating ? '<div class="rate-line">'+starsHTML(Math.round(+m.rating))+'<b class="mono">'+(+m.rating).toFixed(1)+'</b><span class="hint">'+esc(RATING_WORDS[Math.round(+m.rating)] || '')+'</span>'
+       + (m.ratings && breakdownHTML(m.ratings) ? '<span class="rate-bd">'+breakdownHTML(m.ratings)+'</span>' : '')+'</div>' : '')
+   + (m.caption ? '<p class="cap">'+esc(m.caption)+'</p>' : '') + '</div></article>';
+}
+function statusLine(){ return mode === "connecting" ? '<p class="status">Loading your group…</p>' : ''; }
+
+/* ---------- Router ---------- */
+let stack = [{v:"feed"}];
+const cur = () => stack[stack.length-1];
+function go(r, reset){ if (reset) stack = [r]; else stack.push(r); render(); window.scrollTo(0,0); }
+function back(){ if (stack.length > 1){ stack.pop(); render(); } }
+function render(){
+  const out = mode === "setup" || mode === "signedout" || mode === "notmember";
+  document.body.classList.toggle("signed-out", out);
+  if (out){ $("#bar").innerHTML = ""; const keepEmail = $("#a-email") ? $("#a-email").value : ""; $("#view").innerHTML = viewAuth(); if (keepEmail && $("#a-email")) $("#a-email").value = keepEmail; return; }
+  const r = cur(); let title = "", html = "";
+  if (r.v === "feed") html = viewFeed();
+  else if (r.v === "explore"){ title = "Explore"; html = viewExplore(); }
+  else if (r.v === "country"){ title = C[r.id].name; html = viewCountry(r.id); }
+  else if (r.v === "dish"){ title = D[r.id].name; html = viewDish(r.id); }
+  else if (r.v === "user"){ title = r.id === me ? "Your passport" : nameOf(r.id); html = viewUser(r.id); }
+  const bar = $("#bar");
+  if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>';
+  else if (r.v === "feed") bar.innerHTML = '<span class="wordmark"><span class="dot"></span>Our Plate Passport</span>';
+  else bar.innerHTML = '<h1 style="font-size:24px;font-weight:800">'+esc(title)+'</h1>';
+  const ae = document.activeElement, keep = ae && (ae.id === "q" || ae.id === "mq") ? {id:ae.id, pos:ae.selectionStart} : null;
+  $("#view").innerHTML = html;
+  if (keep){ const el = $("#" + keep.id); if (el){ el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch(e) {} if (keep.id === "mq") renderMapSugg(el.value); } }
+  const root = stack[0].v === "user" ? "passport" : stack[0].v;
+  document.querySelectorAll(".tab[data-act=tab]").forEach(t => t.setAttribute("aria-current", t.dataset.id === root ? "page" : "false"));
+  if (r.v === "explore") renderExploreResults();
+  if (r.v === "user"){ afterMap(); setupZoom(r.id); }
+}
+
+/* ---------- Views ---------- */
+function viewFeed(){
+  const feed = MEALS.slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.created || "").localeCompare(a.created || ""));
+  let h = '<div class="stack">' + statusLine();
+  if (mode !== "connecting" && feed.length === 0){
+    h += '<div class="empty-state"><p><b style="color:var(--fg)">No meals yet.</b></p><p>Log the first one, and it shows up here for everyone you share this passport with.</p><button class="btn primary" data-act="log" data-id="">'+I.camera+'Log a meal</button></div>';
+  }
+  if (mode === "shared" && friends().length === 0 && isOwner){
+    h += '<section class="guide"><h3 style="font-size:17px;font-weight:600">Add your friends</h3><p class="hint">Add their email addresses under Group members on your Passport, then send them this site\'s address. They create an account with that email.</p><button class="btn" data-act="tab" data-id="passport" style="align-self:flex-start">Go to Group members</button></section>';
+  }
+  if (friends().length){
+    h += '<div class="section-h"><h2>Your group</h2><span>'+(friends().length + 1)+' people</span></div><div class="people">'
+      + [me].concat(friends()).map(id => { const st = statsFor(id);
+          return '<button class="person" data-act="user" data-id="'+esc(id)+'">'+avatar(id, "lg")+'<b>'+esc(shortName(id))+'</b><small>'+st.dishes+' dish'+(st.dishes === 1 ? '' : 'es')+' · '+st.countries+' countr'+(st.countries === 1 ? 'y' : 'ies')+'</small></button>'; }).join("") + '</div>';
+  }
+  if (feed.length) h += '<div class="section-h"><h2>Latest meals</h2></div>' + feed.map(postCard).join("");
+  return h + '</div>';
+}
+
+function viewExplore(){
+  return '<div class="stack"><label class="search">'+I.search+'<input id="q" type="search" placeholder="Search a country or dish" autocomplete="off" aria-label="Search" value="'+esc(cur().q || "")+'"></label>'
+   + '<div class="fchips" role="group" aria-label="Filter by continent">'+["All"].concat(CONTINENTS).map(c => '<button class="fchip" data-act="cont" data-id="'+c+'" aria-pressed="'+((cur().cont || "All") === c)+'">'+c+'</button>').join("")+'</div>'
+   + '<div id="results" class="stack"></div></div>';
+}
+function renderExploreResults(){
+  const q = (cur().q || "").trim().toLowerCase(), out = $("#results"); if (!out) return;
+  const sel = cur().cont || "All", inSel = code => sel === "All" || CONTINENT(code) === sel;
+  const mine = triedMap(me);
+  if (!q){
+    out.innerHTML = CONTINENTS.filter(ct => sel === "All" || ct === sel).map(ct => { const list = COUNTRIES.filter(c => CONTINENT(c.code) === ct);
+      return '<div class="section-h"><h2>'+ct+'</h2><span>'+list.length+' countr'+(list.length === 1 ? 'y' : 'ies')+'</span></div><div class="c-grid">'
+     + list.map(c => { const n = c.dishes.filter(d => mine[d.id]).length, ph = MEALS.filter(m => m.country === c.code).length;
+        return '<button class="c-card" data-act="country" data-id="'+c.code+'"><span class="flag">'+c.flag+'</span><b>'+esc(c.name)+'</b>'+(GUIDES[c.code] ? '<span class="g-pill">'+I.check+esc(GUIDES[c.code].city)+' guide</span>' : '')+'<span class="meter"><i style="width:'+Math.round(n/c.dishes.length*100)+'%"></i></span><small><span class="mono">'+n+'/'+c.dishes.length+'</span> tried · '+ph+' photo'+(ph === 1 ? '' : 's')+'</small></button>'; }).join("")
+     + '</div>'; }).join("");
+    return;
+  }
+  const cs = COUNTRIES.filter(c => inSel(c.code) && c.name.toLowerCase().includes(q));
+  const ds = Object.values(D).filter(d => inSel(d.country) && (d.name.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q)));
+  let h = "";
+  if (cs.length) h += '<div class="d-list">'+cs.map(c => '<button class="d-row" data-act="country" data-id="'+c.code+'"><span class="em">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'+c.dishes.length+' must-try dishes</small></span></button>').join("")+'</div>';
+  if (ds.length) h += '<div class="d-list">'+ds.map(d => dishRow(d, mine)).join("")+'</div>';
+  out.innerHTML = h || '<div class="empty-state"><p>Nothing matches "'+esc(q)+'"'+(sel !== "All" ? ' in '+esc(sel) : '')+'. Try a dish like "ramen" or a country like "Germany".</p></div>';
+}
+function dishRow(d, mine){
+  const saved = savedOf(me).includes(d.id);
+  return '<button class="d-row" data-act="dish" data-id="'+d.id+'"><span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'+esc(d.desc)+'</small>'
+   + '<span class="meta">'+C[d.country].flag+' '+esc(C[d.country].name)+(d.region ? ' · '+esc(d.region)+' speciality' : '')+facesFor(d.id)+'</span></span>'
+   + (mine[d.id] ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(mine[d.id]).slice(0,6)+'</span>' : '<span class="todo">'+(saved ? 'Saved' : '')+'</span>') + '</button>';
+}
+
+function viewCountry(code){
+  const c = C[code], mine = triedMap(me), n = c.dishes.filter(d => mine[d.id]).length, g = GUIDES[code], b = BASICS[code];
+  const tabs = (g ? [["guide", g.city+" guide"]] : []).concat(b ? [["basics","Basics"]] : []).concat([["list","Must-try list"]]);
+  const tab = cur().tab || tabs[0][0];
+  let h = '<div class="stack"><div class="hero"><span class="flag">'+c.flag+'</span><h2>'+esc(c.name)+'</h2><p><span class="mono">'+n+' of '+c.dishes.length+'</span> must-try dishes eaten</p><span class="meter"><i style="width:'+Math.round(n/c.dishes.length*100)+'%"></i></span></div>';
+  if (tabs.length > 1) h += '<div class="seg" role="tablist" style="grid-template-columns:repeat('+tabs.length+',1fr)">'+tabs.map(t => '<button role="tab" data-act="ctab" data-id="'+t[0]+'" aria-selected="'+(tab === t[0])+'">'+esc(t[1])+'</button>').join("")+'</div>';
+  if (tab === "guide" && g) h += guideView(g);
+  else if (tab === "basics" && b) h += basicsView(b, c);
+  else {
+    h += '<div class="d-list">'+c.dishes.map(d => dishRow(d, mine)).join("")+'</div>';
+    if (!g) h += '<p class="hint">No researched city guide for '+esc(c.name)+' yet. Ask Claude in your chat to research a city here and it\'ll be added with real places and sources.</p>';
+  }
+  return h + '</div>';
+}
+function basicsView(b, c){
+  return '<section class="guide"><h3 style="font-size:20px;font-weight:700">'+esc(b.title)+'</h3><p class="prose">'+esc(b.intro)+'</p><p class="prov">Background from Claude\'s general knowledge. Not yet checked against local sources.</p></section>'
+   + '<div class="section-h"><h2>Everyday habits</h2><span>Across '+esc(c.name)+'</span></div><div class="habits">'+b.habits.map(x => '<div class="habit"><b>'+esc(x[0])+'</b><p>'+esc(x[1])+'</p></div>').join("")+'</div>'
+   + '<div class="section-h"><h2>Getting the classics right</h2></div>'
+   + c.dishes.filter(d => b.dishes[d.id]).map(d => { const x = b.dishes[d.id];
+      return '<article class="pick"><button class="pick-h" data-act="dish" data-id="'+d.id+'"><span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'+esc(d.desc)+'</small></span></button>'
+        + '<div><span class="label">'+esc(x.label)+'</span><div class="must">'+x.must.map(m => '<span>'+esc(m)+'</span>').join("")+'</div></div>'+(x.note ? '<p class="hint">'+esc(x.note)+'</p>' : '')+'</article>'; }).join("");
+}
+function guideView(g){
+  const today = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date().getDay()];
+  let h = '<section class="guide"><h3 style="font-size:20px;font-weight:700">Eating in '+esc(g.city)+'</h3><p class="prose">'+esc(g.intro)+'</p>'
+    + '<p class="prov">Researched by Claude from local food writing and checked in '+esc(g.checked)+'. Places and opening days change, so check before you go. Sources are numbered at the bottom.</p></section>';
+  h += '<div class="section-h"><h2>The Kölsch rules</h2>'+srcLinks(g.rules.src)+'</div><div class="habits">'+g.rules.items.map(x => '<div class="rule">'+esc(x)+'</div>').join("")+'</div>';
+  h += '<div class="section-h"><h2>How '+esc(g.city)+' eats</h2></div><div class="habits">'+g.habits.map(x => '<div class="habit"><b>'+esc(x[0])+'</b><p>'+esc(x[1])+'</p>'+srcLinks(x[2])+'</div>').join("")+'</div>';
+  h += '<div class="section-h"><h2>Where to try the classics</h2></div>';
+  h += g.dishes.map(x => { const d = D[x.dish];
+    return '<article class="pick"><button class="pick-h" data-act="dish" data-id="'+d.id+'"><span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'+(d.region ? esc(d.region)+' speciality' : esc(C[d.country].name))+facesFor(d.id)+'</small></span></button>'
+      + '<p>'+esc(x.note)+'</p><div class="places">'+x.places.map(placeCard).join("")+'</div></article>'; }).join("");
+  h += '<div class="section-h"><h2>Reibekuchen planner</h2>'+srcLinks(g.reibekuchen.src)+'</div><p class="hint">Where to get fresh potato pancakes on each day of the week. '+esc(g.reibekuchen.note)+'</p>'
+    + '<div class="week">'+g.reibekuchen.days.map(([day, list]) => '<div class="wk'+(day === today ? ' today' : '')+'"><span class="dy">'+day+(day === today ? '<br>today' : '')+'</span><ul>'+list.map(p => '<li><b>'+esc(p[0])+'</b> <small>'+esc(p[1])+'</small></li>').join("")+'</ul></div>').join("")+'</div>';
+  g.more.forEach(sec => { h += '<div class="section-h"><h2>'+esc(sec.h)+'</h2></div><div class="places">'+sec.places.map(placeCard).join("")+'</div>'; });
+  h += '<div class="section-h"><h2>Sources</h2></div><section class="guide"><ol class="sources">'+SRC_ORDER.map(k => '<li><a href="'+esc(SRC[k].u)+'" target="_blank" rel="noopener">'+esc(SRC[k].t)+'</a></li>').join("")+'</ol></section>';
+  return h;
+}
+
+function viewDish(id){
+  const d = D[id], c = C[d.country], mine = triedMap(me), saved = savedOf(me).includes(id);
+  const gal = MEALS.filter(m => m.dish === id).sort((a,b) => (b.date || "").localeCompare(a.date || ""));
+  const b = BASICS[d.country] && BASICS[d.country].dishes[id], g = GUIDES[d.country], gd = g && g.dishes.find(x => x.dish === id);
+  const rated = gal.filter(m => +m.rating > 0), avg = rated.length ? rated.reduce((t, m) => t + (+m.rating), 0) / rated.length : 0;
+  const critAvg = CRITERIA.map(([k, l, sh]) => { const v = gal.map(m => +((m.ratings || {})[k]) || 0).filter(Boolean); return v.length ? esc(sh)+' <b>'+(v.reduce((a, b) => a + b, 0) / v.length).toFixed(1)+'</b>' : ''; }).filter(Boolean).join(' · ');
+  let h = '<div class="stack"><div class="dish-hero">'+(gal[0] ? photoHTML(gal[0], true) : '<span class="photo"><span class="art" style="--h:'+hue(id)+'"><span class="e" aria-hidden="true">'+d.emoji+'</span></span></span>')+'</div>'
+   + '<div class="hero"><h2>'+d.emoji+' '+esc(d.name)+'</h2><p><a href="#" data-act="country" data-id="'+c.code+'">'+c.flag+' '+esc(c.name)+'</a>'+(d.region ? ' · '+esc(d.region)+' speciality' : '')+'</p><p style="color:var(--fg)">'+esc(d.desc)+'</p>'
+   + (rated.length ? '<div class="dish-rating">'+starsHTML(Math.round(avg))+'<b>'+avg.toFixed(1)+'</b><span>from '+rated.length+' rating'+(rated.length === 1 ? '' : 's')+' in your group</span></div>'+(critAvg ? '<p class="rate-bd">'+critAvg+'</p>' : '') : '')+(paidHTML(gal))+'</div>'
+   + '<div class="row-btns">'
+   + (mine[id] ? '<span class="tick" style="width:56px;height:56px">'+(isDrink(id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(mine[id]).slice(0,6)+'</span>' : '')
+   + (canWrite() ? '<button class="btn'+(mine[id] ? '' : ' primary')+'" data-act="log" data-id="'+id+'">'+(mine[id] ? I.plus+'Add another photo' : I.camera+(isDrink(id) ? 'I\'ve drunk this' : 'I\'ve eaten this'))+'</button>'
+       + (mine[id] ? '' : '<button class="btn'+(saved ? ' on' : '')+'" data-act="save" data-id="'+id+'" aria-pressed="'+saved+'">'+I.save+(saved ? 'Saved' : 'Want to try')+'</button>') : '')
+   + '</div>';
+  if (b) h += '<section class="pick"><b style="font-family:var(--f-display);font-size:17px">How to have it</b><div><span class="label">'+esc(b.label)+'</span><div class="must">'+b.must.map(m => '<span>'+esc(m)+'</span>').join("")+'</div></div>'+(b.note ? '<p class="hint">'+esc(b.note)+'</p>' : '')+'<p class="prov">General knowledge, not yet checked against local sources.</p></section>';
+  if (gd) h += '<div class="section-h"><h2>Where to try it in '+esc(g.city)+'</h2></div><p>'+esc(gd.note)+'</p><div class="places">'+gd.places.map(placeCard).join("")+'</div>';
+  if (id === "de-reibekuchen" && g) h += '<p><a href="#" data-act="country" data-id="DE">See the Reibekuchen planner in the Cologne guide</a></p>';
+  h += '<div class="section-h"><h2>Your group\'s photos</h2><span>'+gal.length+'</span></div>';
+  h += gal.length ? '<div class="gal">'+gal.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="Photo by '+esc(nameOf(m.uid))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
+                  : '<div class="empty-state"><p>Nobody in your group has logged this yet.</p></div>';
+  return h + '</div>';
+}
+
+/* ---------- World map ----------
+   Country outlines load once from a public map library on jsDelivr (with unpkg and a second
+   library as fallbacks). If none load, the section falls back to a list of flags. */
+let MAP = null, mapState = "idle", mapCache = {key:"", html:""};
+const MAP_SOURCES = [
+  {src:"https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js", kind:"jvm"},
+  {src:"https://unpkg.com/jsvectormap@1.5.3/dist/maps/world.js", kind:"jvm"},
+  {src:"https://cdn.jsdelivr.net/npm/@amcharts/amcharts4-geodata@4.1.28/dist/script/worldLow.js", kind:"geo"}];
+function fromJVM(data){
+  return {w:+data.width, h:+data.height, shapes:Object.keys(data.paths).map(k => ({id:k.toUpperCase(), d:data.paths[k].path, name:data.paths[k].name || k}))};
+}
+function fromGeo(fc){
+  const W = 1000, S = W / (2 * Math.PI), my = lat => 1.25 * Math.log(Math.tan(Math.PI/4 + 0.4 * Math.max(-80, Math.min(84, lat)) * Math.PI / 180));
+  const top = my(84), H = S * (top - my(-58));
+  const pt = ([lon, lat]) => (W/2 + S * lon * Math.PI / 180).toFixed(1) + "," + (S * (top - my(lat))).toFixed(1);
+  const ring = r => "M" + r.map(pt).join("L") + "Z";
+  const shapes = fc.features.map(f => { const g = f.geometry; if (!g) return null;
+    const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+    return {id:String((f.properties && f.properties.id) || f.id || "").toUpperCase(), name:(f.properties && f.properties.name) || "", d:polys.map(p => p.map(ring).join("")).join("")}; }).filter(Boolean);
+  return {w:W, h:H, shapes};
+}
+function loadMap(){
+  if (mapState !== "idle") return;
+  mapState = "loading";
+  const capture = {addMap:(name, data) => { if (!MAP && data && data.paths) MAP = fromJVM(data); }};
+  if (!window.jsVectorMap) window.jsVectorMap = capture;
+  const attempt = i => {
+    if (i >= MAP_SOURCES.length){ mapState = "failed"; if (cur().v === "user") render(); return; }
+    const s = document.createElement("script"); s.src = MAP_SOURCES[i].src; s.async = true;
+    s.onload = () => {
+      try { if (!MAP && MAP_SOURCES[i].kind === "geo" && window.am4geodata_worldLow) MAP = fromGeo(window.am4geodata_worldLow); } catch(e) {}
+      if (MAP && MAP.shapes.length > 50){ mapState = "ready"; if (cur().v === "user") render(); } else { MAP = null; attempt(i + 1); }
+    };
+    s.onerror = () => attempt(i + 1);
+    document.head.appendChild(s);
+  };
+  attempt(0);
+}
+function mapHTML(uid){
+  loadMap();
+  const visited = new Set(mealsOf(uid).map(m => m.country)), listed = new Set(COUNTRIES.map(c => c.code)), tried = triedMap(uid);
+  const done = new Set(COUNTRIES.filter(c => c.dishes.every(d => tried[d.id])).map(c => c.code));
+  const n = COUNTRIES.filter(c => visited.has(c.code)).length;
+  let h = '<div class="section-h"><h2>'+(uid === me ? 'Your map' : esc(shortName(uid))+'\'s map')+'</h2><span>'+n+' of '+COUNTRIES.length+' countries'+(done.size ? ' · '+done.size+' completed' : '')+'</span></div>';
+  if (mapState === "ready"){
+    const key = uid + "|" + Array.from(visited).sort().join(",") + "|" + Array.from(done).sort().join(",");
+    if (mapCache.key !== key){
+      mapCache.key = key;
+      mapCache.html = '<svg class="world" viewBox="'+(MAP.vb || ('0 0 ' + MAP.w + ' ' + MAP.h))+'" role="img" aria-label="World map with '+n+' countries eaten in"><g>'
+        + MAP.shapes.filter(s => s.id !== "AQ" && s.id !== "ATA").map(s => { const st = done.has(s.id) ? "c" : visited.has(s.id) ? "v" : listed.has(s.id) ? "l" : "o";
+            return '<path class="c-'+st+'" d="'+s.d+'" data-cid="'+esc(s.id)+'"'+(listed.has(s.id) ? ' data-act="country" data-id="'+s.id+'" data-v="'+(st === "v" || st === "c" ? 1 : 0)+'" data-done="'+(st === "c" ? 1 : 0)+'"' : '')+'><title>'+esc(s.name)+(st === "c" ? ' · completed' : st === "v" ? ' · eaten here' : listed.has(s.id) ? ' · on the list' : '')+'</title></path>'; }).join("")
+        + '</g><g class="pins"></g></svg>';
+    }
+    h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the map" autocomplete="off" aria-label="Find a country on the map" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
+      + '<div id="mq-result">'+(mapHl ? mapResultHTML(uid, mapHl) : '')+'</div>';
+    h += '<div class="map-box">'+mapCache.html
+      + '<div class="map-ctrl"><button data-act="mz" data-id="in" aria-label="Zoom in">+</button><button data-act="mz" data-id="out" aria-label="Zoom out">−</button><button class="mz-reset" data-act="mz" data-id="reset" aria-label="Show the whole map">⤢</button></div></div>'
+      + '<div class="legend"><span><i class="k-c"></i>Completed</span><span><i class="k-v"></i>Eaten there</span><span><i class="k-l"></i>On the list, not yet</span><span><i class="k-o"></i>Not on the list yet</span><span class="zoom-hint">Pinch or use + and − to zoom</span></div>';
+  } else if (mapState === "failed"){
+    const vs = COUNTRIES.filter(c => visited.has(c.code));
+    h += '<div class="empty-state"><p>The map couldn\'t load right now.</p>'+(vs.length ? '<p style="font-size:26px">'+vs.map(c => c.flag).join(" ")+'</p>' : '')+'</div>';
+  } else {
+    h += '<div class="map-box loading"><span class="hint">Loading map…</span></div>';
+  }
+  return h;
+}
+/* After the map is in the page: crop the view to the land. */
+function afterMap(){
+  const svg = document.querySelector("svg.world"); if (!svg || !MAP) return;
+  try {
+    if (!MAP.vb){ const b = svg.querySelector("g").getBBox(); if (b.width > 0){ const p = b.width * 0.01; MAP.vb = [b.x - p, b.y - p, b.width + 2*p, b.height + 2*p].map(v => v.toFixed(1)).join(" "); svg.setAttribute("viewBox", MAP.vb); mapCache.key = ""; } }
+  } catch(e) {}
+}
+/* Pinch, drag and button zoom for the map. The view survives re-renders while you stay on the same passport. */
+/* >1 makes pinching zoom faster than the fingers move */
+const PINCH_GAIN = 1.7;
+let mapView = null, mapCtl = null, editingNick = false, mapHl = null, mapNameCache = null;
+function largestBox(p, svg){
+  const ns = "http://www.w3.org/2000/svg"; let best = null;
+  (p.getAttribute("d").match(/M[^M]*/g) || []).forEach(part => {
+    const t = document.createElementNS(ns, "path"); t.setAttribute("d", part); svg.appendChild(t);
+    const b = t.getBBox(); t.remove();
+    if (!best || b.width * b.height > best.width * best.height) best = b;
+  });
+  return best;
+}
+function mapNames(){
+  if (!MAP) return [];
+  if (mapNameCache) return mapNameCache;
+  const names = {}, onMap = new Set(MAP.shapes.map(s => s.id));
+  MAP.shapes.forEach(s => { if (s.id !== "AQ" && s.name) names[s.id] = s.name; });
+  COUNTRIES.forEach(c => { if (onMap.has(c.code)) names[c.code] = c.name; });
+  return (mapNameCache = Object.keys(names).map(id => ({id, name:names[id]})).sort((a,b) => a.name.localeCompare(b.name)));
+}
+function findOnMap(q, exact){
+  q = q.trim().toLowerCase(); if (!q) return null;
+  const L = mapNames();
+  return L.find(x => x.name.toLowerCase() === q) || (exact ? null : (L.find(x => x.name.toLowerCase().startsWith(q)) || L.find(x => x.name.toLowerCase().includes(q))));
+}
+function mapResultHTML(uid, id){
+  const c = C[id], x = mapNames().find(n => n.id === id); if (!x) return '';
+  if (!c) return '<div class="mq-res"><span class="t"><b>'+esc(x.name)+'</b><small>Not on the list yet</small></span></div>';
+  const t = triedMap(uid), n = c.dishes.filter(d => t[d.id]).length;
+  return '<div class="mq-res"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'+(n === c.dishes.length ? 'Completed' : n ? n+' of '+c.dishes.length+' must-trys eaten' : 'None of its '+c.dishes.length+' must-trys yet')+'</small></span><button class="btn sm" data-act="country" data-id="'+c.code+'">Open</button></div>';
+}
+function mapMatches(q){
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const L = mapNames();
+  /* match from the start of the name, then from the start of any later word ("kin" finds United Kingdom), never mid-word */
+  const wordStart = n => n.toLowerCase().split(/[\s\-'.,()]+/).slice(1).some(w => w.startsWith(q));
+  return L.filter(x => x.name.toLowerCase().startsWith(q)).concat(L.filter(x => !x.name.toLowerCase().startsWith(q) && wordStart(x.name))).slice(0, 8);
+}
+function renderMapSugg(q){
+  const box = $("#mq-sugg"); if (!box) return;
+  if (!(q || "").trim()){ box.hidden = true; box.innerHTML = ""; return; }
+  const ms = mapMatches(q), t = triedMap(cur().id), ql = q.trim().toLowerCase();
+  const bold = name => { const nl = name.toLowerCase(); let i = nl.startsWith(ql) ? 0 : -1;
+    if (i < 0){ const re = /[\s\-'.,()]+/g; let m; while ((m = re.exec(nl))){ if (nl.startsWith(ql, m.index + m[0].length)){ i = m.index + m[0].length; break; } } } return i < 0 ? esc(name) : esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + ql.length)) + '</b>' + esc(name.slice(i + ql.length)); };
+  box.innerHTML = ms.length ? ms.map(x => { const c = C[x.id], n = c ? c.dishes.filter(d => t[d.id]).length : 0;
+      return '<button role="option" data-act="mq-pick" data-id="'+esc(x.id)+'"><span class="fl">'+(c ? c.flag : '·')+'</span><span class="nm">'+bold(x.name)+'</span><small>'+(c ? (n === c.dishes.length ? 'Completed' : n ? n+'/'+c.dishes.length+' eaten' : 'On the list') : 'Not on the list')+'</small></button>'; }).join("")
+    : '<p class="sugg-none">No countries match "'+esc(q.trim())+'"</p>';
+  box.hidden = false;
+}
+function pickOnMap(id){
+  const x = mapNames().find(n => n.id === id), inp = $("#mq");
+  if (x && inp){ inp.value = x.name; cur().mq = x.name; inp.blur(); }
+  const box = $("#mq-sugg"); if (box){ box.hidden = true; box.innerHTML = ""; }
+  if (mapCtl) mapCtl.focus(id);
+}
+function searchMap(q, exact){
+  const hit = findOnMap(q, exact); if (!hit || !mapCtl) return false;
+  return mapCtl.focus(hit.id);
+}
+function setupZoom(uid){
+  const svg = document.querySelector("svg.world"); mapCtl = null; if (!svg || !MAP) return;
+  const box = svg.closest(".map-box");
+  const B = (MAP.vb || svg.getAttribute("viewBox")).split(" ").map(Number);
+  const ratio = B[3] / B[2], minW = B[2] / 14;
+  let v = mapView && mapView.uid === uid ? Object.assign({}, mapView) : {uid, x:B[0], y:B[1], w:B[2], h:B[3]};
+  const zoomed = () => v.w < B[2] * 0.999;
+  const clampXY = () => { v.x = Math.min(B[0] + B[2] - v.w, Math.max(B[0], v.x)); v.y = Math.min(B[1] + B[3] - v.h, Math.max(B[1], v.y)); };
+  const apply = () => {
+    mapView = Object.assign({}, v);
+    svg.setAttribute("viewBox", [v.x, v.y, v.w, v.h].map(n => n.toFixed(2)).join(" "));
+    svg.style.touchAction = zoomed() ? "none" : "pan-y";
+    box.classList.toggle("zoomed", zoomed());
+    svg.querySelectorAll(".pin").forEach(c => c.setAttribute("r", (v.w * 0.0085).toFixed(2)));
+  };
+  const zoomAt = (f, cx, cy) => {
+    const r = svg.getBoundingClientRect(); if (!r.width) return;
+    const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height, px = v.x + fx * v.w, py = v.y + fy * v.h;
+    v.w = Math.min(B[2], Math.max(minW, v.w / f)); v.h = v.w * ratio;
+    v.x = px - fx * v.w; v.y = py - fy * v.h; clampXY(); apply();
+  };
+  const centre = () => { const r = svg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  mapCtl = {button: id => {
+    if (id === "in") zoomAt(1.6, ...centre());
+    else if (id === "out") zoomAt(1 / 1.6, ...centre());
+    else { v = {uid, x:B[0], y:B[1], w:B[2], h:B[3]}; apply(); highlight(null); }
+  }, focus: id => {
+    const p = svg.querySelector('path[data-cid="'+id+'"]'); if (!p) return false;
+    const b = largestBox(p, svg); if (!b) return false;
+    v.w = Math.min(B[2], Math.max(b.width * 2.6, b.height * 2.6 / ratio, minW * 1.4)); v.h = v.w * ratio;
+    v.x = b.x + b.width / 2 - v.w / 2; v.y = b.y + b.height / 2 - v.h / 2; clampXY(); apply(); highlight(id);
+    return true;
+  }};
+  const highlight = id => {
+    mapHl = id; svg.querySelectorAll("path.hl").forEach(x => x.classList.remove("hl"));
+    const p = id && svg.querySelector('path[data-cid="'+id+'"]'); if (p){ p.classList.add("hl"); p.parentNode.appendChild(p); }
+    const out = $("#mq-result"); if (out) out.innerHTML = id ? mapResultHTML(uid, id) : '';
+  };
+  apply(); if (mapHl) highlight(mapHl);
+  const pts = new Map(); let moved = 0;
+  svg.addEventListener("pointerdown", e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); if (pts.size === 1) moved = 0; });
+  svg.addEventListener("pointermove", e => {
+    const prev = pts.get(e.pointerId); if (!prev) return;
+    const now = {x:e.clientX, y:e.clientY};
+    if (pts.size >= 2){
+      const other = Array.from(pts.entries()).find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(now.x - other.x, now.y - other.y);
+      if (d0 > 0) zoomAt(Math.pow(d1 / d0, PINCH_GAIN), (now.x + other.x) / 2, (now.y + other.y) / 2);
+      moved += 20;
+    } else if (zoomed()){
+      const r = svg.getBoundingClientRect();
+      v.x -= (now.x - prev.x) * v.w / r.width; v.y -= (now.y - prev.y) * v.h / r.height; clampXY(); apply();
+      moved += Math.abs(now.x - prev.x) + Math.abs(now.y - prev.y);
+      if (moved > 6) { try { svg.setPointerCapture(e.pointerId); } catch(err) {} }
+    }
+    pts.set(e.pointerId, now);
+  });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(t => svg.addEventListener(t, e => pts.delete(e.pointerId)));
+  /* a drag or pinch shouldn't count as tapping a country */
+  svg.addEventListener("click", e => { if (moved > 6){ e.stopPropagation(); e.preventDefault(); moved = 0; } }, true);
+  /* trackpad pinch (arrives as ctrl + wheel), or any wheel once zoomed in */
+  svg.addEventListener("wheel", e => { if (!e.ctrlKey && !zoomed()) return; e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.004), e.clientX, e.clientY); }, {passive:false});
+}
+function badgesFor(st){ return [["First stamp", st.dishes >= 1],["Five-plate club", st.dishes >= 5],["Three passports", st.countries >= 3],["Country complete", COUNTRIES.some(c => c.dishes.every(d => st.tried[d.id]))]]; }
+function viewUser(uid){
+  const isMe = uid === me, st = statsFor(uid), ms = mealsOf(uid);
+  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : avatar(uid, "lg"))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
+     + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
+  if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
+  h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>';
+  h += '<div class="badges">'+badgesFor(st).map(b => '<span class="badge '+(b[1] ? 'got' : 'not')+'">'+(b[1] ? '✓ ' : '')+esc(b[0])+'</span>').join("")+'</div>';
+  h += mapHTML(uid);
+  /* Meals: one compact card per country (must-try progress + that country's photos), or every photo as a grid */
+  h += '<div class="section-h"><h2>Meals</h2><span>'+ms.length+'</span></div>';
+  if (!ms.length) h += '<div class="empty-state"><p>No meals logged yet.</p>'+(isMe && canWrite() ? '<button class="btn primary" data-act="log" data-id="">'+I.camera+'Log your first meal</button>' : '')+'</div>';
+  else {
+    const pv = cur().pview || "countries";
+    h += '<div class="seg" role="tablist"><button role="tab" data-act="pview" data-id="countries" aria-selected="'+(pv === "countries")+'">By country</button><button role="tab" data-act="pview" data-id="all" aria-selected="'+(pv === "all")+'">All photos</button></div>';
+    if (pv === "all") h += '<div class="gal">'+ms.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>';
+    else {
+      const order = []; ms.forEach(m => { if (C[m.country] && !order.includes(m.country)) order.push(m.country); });   /* most recent first */
+      h += order.map(code => {
+        const c = C[code], cms = ms.filter(m => m.country === code), n = c.dishes.filter(d => st.tried[d.id]).length, done = n === c.dishes.length;
+        return '<section class="cc"><button class="cc-h" data-act="country" data-id="'+code+'"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'
+          + (done ? '<span class="cc-done">Completed</span> · ' : n+' of '+c.dishes.length+' must-trys · ')+cms.length+' meal'+(cms.length === 1 ? '' : 's')+'</small></span><span class="chev" aria-hidden="true">›</span></button>'
+          + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span>'
+          + '<div class="strip">'+cms.map(m => '<button class="sthumb" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+(m.dish && D[m.dish] ? '' : '<span class="off-tag">Off list</span>')+'</button>').join("")+'</div></section>';
+      }).join("");
+    }
+  }
+  const want = savedOf(uid).filter(id => D[id] && !st.tried[id]);
+  h += '<div class="section-h"><h2>'+(isMe ? 'Want to try' : 'Wants to try')+'</h2><span>'+want.length+'</span></div>';
+  h += want.length ? '<div class="d-list">'+want.map(id => dishRow(D[id], triedMap(me))).join("")+'</div>' : '<p class="hint">'+(isMe ? 'Tap "Want to try" on any dish to save it for a trip.' : 'Nothing saved yet.')+'</p>';
+  if (isMe && friends().length){
+    const board = [me].concat(friends()).map(id => ({id, s:statsFor(id)})).sort((a,b) => b.s.dishes - a.s.dishes || b.s.countries - a.s.countries);
+    h += '<div class="section-h"><h2>Group leaderboard</h2><span>Must-trys eaten</span></div><div class="board">'
+      + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
+  }
+  if (isMe) h += membersHTML() + '<p style="text-align:center;margin-top:8px"><button class="btn" data-act="sign-out">Sign out</button></p>';
+  return h + '</div>';
+}
+
+/* ---------- Sheets ---------- */
+function openSheet(html){ $("#sheet").innerHTML = '<div class="grip"></div>'+html; $("#sheet-wrap").hidden = false; document.body.style.overflow = "hidden"; const f = $("#sheet").querySelector("button,input,select"); if (f) f.focus({preventScroll:true}); }
+function closeSheet(){ $("#sheet-wrap").hidden = true; document.body.style.overflow = ""; }
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3600); }
+const findMeal = id => MEALS.find(m => m.id === id);
+
+let K = null;  /* composer state */
+function openComposer(dishId){
+  if (!canWrite()){ toast(mode === "connecting" ? "Still connecting. Try again in a moment." : "Sign in to log meals."); return; }
+  const d = dishId && D[dishId];
+  K = {thumb:null, full:null, busy:false, posting:false, country:d ? d.country : "", dish:dishId || "", custom:"", place:"", date:todayISO(), caption:"", ratings:{taste:0, look:0, value:0}, price:"", cur:d ? CUR[d.country] || "EUR" : "EUR", curManual:false};
+  renderComposer();
+}
+function openEditor(m){
+  if (!m || m.uid !== me || !canWrite()) return;
+  K = {editId:m.id, thumb:m.thumb, photoUrl:m.photo || m.thumb, full:null, photoChanged:false, busy:false, posting:false, country:m.country || "", dish:m.dish && D[m.dish] ? m.dish : "__other",
+       custom:m.custom || "", place:m.place || "", date:m.date || todayISO(), caption:m.caption || "", ratings:Object.assign({taste:0, look:0, value:0}, m.ratings || {}), legacy:(!m.ratings && +m.rating) || 0,
+       price:m.price && +m.price.amount ? String(m.price.amount) : "", cur:(m.price && m.price.cur) || CUR[m.country] || "EUR", curManual:true};
+  renderComposer();
+}
+const RATING_WORDS = ["", "Not for me", "It was okay", "Good", "Really good", "Unmissable"];
+const CRITERIA = [["taste","Taste","Taste"],["look","Presentation","Presentation"],["value","Value for money","Value"]];
+/* prices: optional, in the local currency by default; value for money is only rated once a price is entered */
+const CUR = {GB:"GBP",IE:"EUR",FR:"EUR",DE:"EUR",IT:"EUR",ES:"EUR",PT:"EUR",GR:"EUR",NL:"EUR",BE:"EUR",AT:"EUR",HR:"EUR",CH:"CHF",CZ:"CZK",PL:"PLN",HU:"HUF",SE:"SEK",DK:"DKK",
+  JP:"JPY",TH:"THB",VN:"VND",IN:"INR",US:"USD",CA:"CAD",MX:"MXN",AR:"ARS",BR:"BRL",PE:"PEN",CL:"CLP",CO:"COP",UY:"UYU",EC:"USD",BO:"BOB",VE:"VES",AU:"AUD",MA:"MAD",ZA:"ZAR"};
+const curOptions = (country, current) => Array.from(new Set([CUR[country] || "EUR", current, "GBP", "EUR", "USD"].filter(Boolean)));
+const hasPrice = () => K && +K.price > 0;
+const effRatings = () => Object.assign({}, K.ratings, hasPrice() ? {} : {value:0});
+const priceObj = () => hasPrice() ? {amount:Math.round(+K.price * 100) / 100, cur:K.cur} : null;
+function priceText(pr){
+  if (!pr || !(+pr.amount > 0)) return "";
+  try { return new Intl.NumberFormat(undefined, {style:"currency", currency:pr.cur}).format(+pr.amount); } catch(e) { return (+pr.amount).toFixed(2) + " " + pr.cur; }
+}
+function paidHTML(gal){
+  const ps = gal.filter(m => m.price && +m.price.amount > 0); if (!ps.length) return '';
+  const counts = {}; ps.forEach(m => counts[m.price.cur] = (counts[m.price.cur] || 0) + 1);
+  const cur = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0], same = ps.filter(m => m.price.cur === cur);
+  const avg = same.reduce((t, m) => t + (+m.price.amount), 0) / same.length;
+  return '<p class="rate-bd">Average paid <b>'+esc(priceText({amount:avg, cur}))+'</b> from '+same.length+' meal'+(same.length === 1 ? '' : 's')+'</p>';
+}
+const overallOf = r => { const v = CRITERIA.map(([k]) => +((r || {})[k]) || 0).filter(Boolean); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : 0; };
+const breakdownHTML = r => r ? CRITERIA.filter(([k]) => +r[k]).map(([k, l, sh]) => esc(sh)+' <b>'+(+r[k])+'</b>').join(' · ') : '';
+const starsHTML = r => r ? '<span class="rating" role="img" aria-label="Rated '+r+' out of 5">'+'★'.repeat(r)+'<span class="off">'+'★'.repeat(5 - r)+'</span></span>' : '';
+function renderComposer(){
+  const c = K.country ? C[K.country] : null, g = c && GUIDES[c.code];
+  const ready = (K.thumb || K.srcImg) && K.country && K.dish && (K.dish !== "__other" || K.custom.trim()) && !K.posting;
+  const placeOpts = g ? Array.from(new Set(g.dishes.flatMap(x => x.places.map(p => p.n)).concat(g.more.flatMap(s => s.places.map(p => p.n))))) : [];
+  openSheet('<div class="sheet-h"><h2>'+(K.editId ? 'Edit meal' : 'Log a meal')+'</h2><button class="icon-btn" data-act="close" aria-label="Close">'+I.close+'</button></div><div class="stack">'
+   + (K.srcImg
+       ? '<div class="frame-pick" role="group" aria-label="Photo shape">'+[["p","Portrait"],["l","Landscape"]].map(([k, l]) => '<button class="fchip" data-act="frame" data-id="'+k+'" aria-pressed="'+((K.frame < 1) === (k === "p"))+'">'+l+'</button>').join("")+'</div>'
+         + '<div class="cropper" style="aspect-ratio:'+(K.frame < 1 ? '3/4;max-width:min(100%,360px)' : '4/3')+'"><canvas id="crop-cv" aria-label="Photo preview. Drag to choose which part shows."></canvas><span class="crop-hint">Drag to position · pinch or slide to zoom</span></div>'
+         + '<div class="crop-ctrl"><label class="label" for="crop-z">Zoom</label><input id="crop-z" type="range" min="1" max="4" step="0.01" value="'+K.crop.z+'"></div>'
+       : '<label class="drop" for="c-file">'+(K.thumb ? '<img src="'+K.thumb+'" alt="Your photo">' : I.camera+'<b style="color:var(--fg)">'+(K.busy ? 'Preparing photo…' : 'Add your photo')+'</b><span class="hint">Tap to choose from your phone or computer</span>')+'</label>')
+   + '<input id="c-file" class="vh" type="file" accept="image/*,.heic,.heif">'
+   + (K.srcImg || K.thumb ? '<p class="hint">Location data in the photo is removed. '+(!K.srcImg && K.thumb ? '<a href="#" data-act="crop-existing">Reposition this photo</a> · ' : '')+'<a href="#" data-act="pick-again">Choose a different photo</a></p>' : '')
+   + '<div class="p-grid"><div class="field"><label class="label" for="c-country">Country</label><select id="c-country"><option value="">Choose a country</option>'+COUNTRIES.map(x => '<option value="'+x.code+'"'+(x.code === K.country ? ' selected' : '')+'>'+x.flag+' '+esc(x.name)+'</option>').join("")+'</select></div>'
+   + '<div class="field"><label class="label" for="c-date">Date</label><input id="c-date" type="date" value="'+esc(K.date)+'" max="'+todayISO()+'"></div></div>'
+   + (c ? '<div class="field"><label class="label" for="c-dish">Dish</label><select id="c-dish"><option value="">Choose a dish</option>'+c.dishes.map(x => '<option value="'+x.id+'"'+(x.id === K.dish ? ' selected' : '')+'>'+x.emoji+' '+esc(x.name)+'</option>').join("")+'<option value="__other"'+(K.dish === "__other" ? ' selected' : '')+'>Not on the list…</option></select></div>' : '')
+   + (K.dish === "__other" ? '<div class="field"><label class="label" for="c-other">What did you eat?</label><input id="c-other" type="text" maxlength="60" placeholder="e.g. Mettbrötchen" value="'+esc(K.custom)+'"></div>' : '')
+   + '<div class="field"><label class="label" for="c-place">Where? (optional)</label><input id="c-place" type="text" maxlength="80" list="c-places" placeholder="Restaurant, market stall, someone\'s kitchen" value="'+esc(K.place)+'">'+(placeOpts.length ? '<datalist id="c-places">'+placeOpts.map(n => '<option value="'+esc(n)+'">').join("")+'</datalist>' : '')+'</div>'
+   + '<div class="p-grid"><div class="field"><label class="label" for="c-price">Price (optional)</label><input id="c-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="e.g. 12.50" value="'+esc(K.price)+'"></div>'
+   + '<div class="field"><label class="label" for="c-cur">Currency</label><select id="c-cur">'+curOptions(K.country, K.cur).map(cc => '<option value="'+cc+'"'+(cc === K.cur ? ' selected' : '')+'>'+cc+'</option>').join("")+'</select></div></div>'
+   + '<div class="field"><span class="label">Your ratings (optional)</span><div class="rate-rows">'
+   + CRITERIA.filter(([k]) => k !== "value" || hasPrice()).map(([k, label]) => '<div class="rate-row"><span class="rl" id="rl-'+k+'">'+esc(label)+'</span><div class="stars-in" role="radiogroup" aria-labelledby="rl-'+k+'">'
+       + [1,2,3,4,5].map(n => '<button type="button" role="radio" aria-checked="'+(K.ratings[k] === n)+'" aria-label="'+esc(label)+': '+n+' star'+(n > 1 ? 's' : '')+'" data-act="rate" data-id="'+k+':'+n+'" class="'+(n <= K.ratings[k] ? 'on' : '')+'">★</button>').join("")
+       + '</div></div>').join("")
+   + '</div>'+(overallOf(effRatings()) ? '<p class="rate-overall">Overall <b>'+overallOf(effRatings()).toFixed(1)+'</b> · '+esc(RATING_WORDS[Math.round(overallOf(effRatings()))])+'</p>' : '<p class="hint">Tap the stars for any you want to rate.'+(hasPrice() ? '' : ' Add a price to rate value for money.')+'</p>')+'</div>'
+   + '<div class="field"><label class="label" for="c-caption">Caption</label><textarea id="c-caption" maxlength="280" placeholder="Was it worth it?">'+esc(K.caption)+'</textarea></div>'
+   + '<p class="hint">Everyone in your group can see what you post.</p>'
+   + '<button class="btn primary" id="c-post" data-act="post-meal"'+(ready ? '' : ' disabled')+'>'+(K.posting ? 'Saving…' : K.editId ? 'Save changes' : 'Add to my passport')+'</button>'
+   + (ready || K.posting ? '' : '<p class="hint" style="text-align:center">'+(K.editId ? 'Choose a country and a dish to save.' : 'Add a photo, a country and a dish to post.')+'</p>') + '</div>');
+  if (K.srcImg) setupCrop();
+}
+/* ---------- Photo framing: portrait 3:4 or landscape 4:3 (the two iPhone shapes), defaulting to the photo's own shape so it fits whole ---------- */
+function initCrop(img){ K.srcImg = img; K.frame = img.naturalHeight > img.naturalWidth ? 3 / 4 : 4 / 3; K.crop = {z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}; K.photoChanged = true; }
+function cropRect(){
+  const W = K.srcImg.naturalWidth, H = K.srcImg.naturalHeight, F = K.frame;
+  const bw = W / H > F ? H * F : W, bh = bw / F, cw = bw / K.crop.z, ch = bh / K.crop.z;
+  K.crop.cx = Math.min(W - cw / 2, Math.max(cw / 2, K.crop.cx)); K.crop.cy = Math.min(H - ch / 2, Math.max(ch / 2, K.crop.cy));
+  return {x:K.crop.cx - cw / 2, y:K.crop.cy - ch / 2, w:cw, h:ch};
+}
+function drawCrop(){
+  const cv = $("#crop-cv"); if (!cv || !K || !K.srcImg) return;
+  const r = cropRect(), dpr = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth || 360;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(w * dpr / K.frame)){ cv.width = Math.round(w * dpr); cv.height = Math.round(w * dpr / K.frame); }
+  cv.getContext("2d").drawImage(K.srcImg, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+}
+function cropTo(maxLong){
+  const r = cropRect(), maxW = K.frame >= 1 ? maxLong : maxLong * K.frame, w = Math.round(Math.min(maxW, r.w)), h = Math.round(w / K.frame), cv = document.createElement("canvas");
+  cv.width = w; cv.height = h; cv.getContext("2d").drawImage(K.srcImg, r.x, r.y, r.w, r.h, 0, 0, w, h); return cv;
+}
+async function finalizePhoto(){
+  if (!K.srcImg) return;
+  let thumb = cropTo(560).toDataURL("image/jpeg", 0.72);          /* re-encoding drops EXIF, including GPS */
+  if (thumb.length > 170000) thumb = cropTo(400).toDataURL("image/jpeg", 0.62);
+  K.thumb = thumb;
+  K.thumbBlob = await new Promise(res => cropTo(560).toBlob(res, "image/jpeg", 0.78));
+  K.full = await new Promise(res => cropTo(1600).toBlob(res, "image/jpeg", 0.85));
+}
+function setupCrop(){
+  const cv = $("#crop-cv"); if (!cv) return;
+  drawCrop();
+  const zoomBy = f => { K.crop.z = Math.min(4, Math.max(1, K.crop.z * f)); const zi = $("#crop-z"); if (zi) zi.value = K.crop.z; drawCrop(); };
+  const pts = new Map();
+  cv.addEventListener("pointerdown", e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); try { cv.setPointerCapture(e.pointerId); } catch(err) {} });
+  cv.addEventListener("pointermove", e => {
+    const prev = pts.get(e.pointerId); if (!prev) return;
+    const now = {x:e.clientX, y:e.clientY};
+    if (pts.size >= 2){
+      const other = Array.from(pts.entries()).find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(now.x - other.x, now.y - other.y);
+      if (d0 > 0) zoomBy(Math.pow(d1 / d0, PINCH_GAIN));
+    } else {
+      const r = cropRect(), k = r.w / (cv.clientWidth || 1);
+      K.crop.cx -= (now.x - prev.x) * k; K.crop.cy -= (now.y - prev.y) * k; drawCrop();
+    }
+    pts.set(e.pointerId, now);
+  });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(t => cv.addEventListener(t, e => pts.delete(e.pointerId)));
+  cv.addEventListener("wheel", e => { e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0035)); }, {passive:false});
+}
+async function saveEdit(){
+  const m = findMeal(K.editId); if (!m){ closeSheet(); K = null; return; }
+  K.posting = true; renderComposer(); await finalizePhoto();
+  const patch = {country:K.country, dish:K.dish === "__other" ? null : K.dish, custom:K.dish === "__other" ? K.custom.trim() : "", date:K.date || todayISO(),
+    place:K.place.trim(), caption:K.caption.trim(), ratings:effRatings(), rating:overallOf(effRatings()) || K.legacy || 0, price:priceObj()};
+  const oldFiles = [m.photo_path, m.thumb_path], newFiles = [];
+  try {
+    if (K.photoChanged && K.thumbBlob){
+      const base = me + "/" + m.id + "-" + Date.now().toString(36);
+      patch.thumb_path = await uploadPhoto(base + "-t.jpg", K.thumbBlob); newFiles.push(patch.thumb_path);
+      patch.photo_path = K.full ? await uploadPhoto(base + ".jpg", K.full) : null; if (patch.photo_path) newFiles.push(patch.photo_path);
+      patch.ratio = K.frame < 1 ? "3:4" : "4:3";
+    }
+    const {error} = await sb.from("meals").update(patch).eq("id", m.id);
+    if (error) throw error;
+  } catch(e){ removeFiles(newFiles); writeFailed(e); K.posting = false; renderComposer(); return; }
+  if (newFiles.length) removeFiles(oldFiles);
+  await refresh();
+  closeSheet(); K = null; toast("Meal updated.");
+}
+async function postMeal(){
+  if (K.editId) return saveEdit();
+  K.posting = true; renderComposer(); await finalizePhoto();
+  const m = {uid:me, dish:K.dish === "__other" ? null : K.dish, custom:K.dish === "__other" ? K.custom.trim() : "", country:K.country, date:K.date || todayISO(),
+    place:K.place.trim(), caption:K.caption.trim(), ratings:effRatings(), rating:overallOf(effRatings()), price:priceObj(), ratio:K.frame < 1 ? "3:4" : "4:3", likes:{}, created:new Date().toISOString()};
+  const wasNew = m.dish && !triedMap(me)[m.dish];
+  const ok = await addMeal(m, {thumb:K.thumbBlob, full:K.full});
+  if (!ok){ K.posting = false; renderComposer(); return; }
+  closeSheet(); K = null;
+  if (m.dish) go({v:"dish", id:m.dish}); else go({v:"user", id:me}, true);
+  toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
+}
+
+/* ---------- Events ---------- */
+document.addEventListener("click", e => {
+  if (!e.target.closest(".mq-wrap")){ const box = $("#mq-sugg"); if (box && !box.hidden) box.hidden = true; }
+  const t = e.target.closest("[data-act]"); if (!t) return;
+  const a = t.dataset.act, id = t.dataset.id;
+  if (t.tagName === "A") e.preventDefault();
+  switch (a){
+    case "tab": closeSheet(); go(id === "passport" ? {v:"user", id:me} : {v:id}, true); break;
+    case "back": back(); break;
+    case "close": closeSheet(); break;
+    case "country": closeSheet(); go({v:"country", id}); break;
+    case "dish": closeSheet(); go({v:"dish", id}); break;
+    case "user": closeSheet(); go({v:"user", id}); break;
+    case "ctab": cur().tab = id; render(); break;
+    case "pview": cur().pview = id; render(); break;
+    case "mz": if (mapCtl) mapCtl.button(id); break;
+    case "sign-out": closeSheet(); sb.auth.signOut(); break;
+    case "auth-view": authView = id; authMsg = ""; render(); break;
+    case "save-nick1": { const v = ($("#nick1").value || "").trim().slice(0, 30); if (!v){ toast("Add a name first."); break; } closeSheet(); setPerson({nick:v}); toast("Welcome, " + v + "!"); break; }
+    case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
+      sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
+    case "mem-add": addMember($("#mem-email").value); break;
+    case "mem-del": openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(id)+'?</h2><p class="hint">They won\'t be able to see the group any more. Meals they already posted stay.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break;
+    case "mem-del-yes": closeSheet(); removeMember(id); break;
+    case "mq-pick": pickOnMap(id); break;
+    case "cont": cur().cont = id; document.querySelectorAll(".fchip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id))); renderExploreResults(); break;
+    case "post": { const m = findMeal(id); if (m) openSheet(postCard(m)); break; }
+    case "like": { const m = findMeal(id); if (m && canWrite()) toggleLike(m); break; }
+    case "save": { if (!canWrite()) break; const s = savedOf(me).slice(), i = s.indexOf(id); if (i >= 0) s.splice(i,1); else s.push(id);
+      setPerson({saved:s}); toast(i >= 0 ? "Removed from Want to try." : D[id].name + " saved to Want to try."); break; }
+    case "pp-remove": setAvatar(null).then(ok => { if (ok) toast("Profile picture removed."); }); break;
+    case "edit-nick": editingNick = true; render(); { const el = $("#nick"); if (el) el.focus(); } break;
+    case "cancel-nick": editingNick = false; render(); break;
+    case "save-nick": { const v = ($("#nick").value || "").trim().slice(0,30); editingNick = false; setPerson({nick:v}); toast(v ? "Friends now see you as " + v + "." : "Friends now see your account name."); break; }
+    case "menu": openSheet('<div class="menu"><button data-act="edit-meal" data-id="'+esc(id)+'">Edit this meal</button><button class="danger" data-act="del-ask" data-id="'+esc(id)+'">Delete this meal</button><button data-act="close">Cancel</button></div>'); break;
+    case "del-ask": openSheet('<div class="stack"><h2 style="font-size:20px">Delete this meal?</h2><p class="hint">It comes out of your passport and your friends\' feed. This can\'t be undone.</p><div class="row-btns"><button class="btn" data-act="close">Keep it</button><button class="btn primary" data-act="del" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Delete</button></div></div>'); break;
+    case "del": { const m = findMeal(id); closeSheet(); if (m){ deleteMeal(m); toast("Meal deleted."); } break; }
+    case "log": openComposer(id || (cur().v === "dish" ? cur().id : "")); break;
+    case "pick-again": $("#c-file").click(); break;
+    case "frame": if (K && K.srcImg){ K.frame = id === "p" ? 3 / 4 : 4 / 3; K.crop.z = 1; K.crop.cx = K.srcImg.naturalWidth / 2; K.crop.cy = K.srcImg.naturalHeight / 2; renderComposer(); } break;
+    case "crop-existing": if (K && K.thumb){ const img = new Image(); K.busy = true;
+        img.onload = () => { K.busy = false; initCrop(img); renderComposer(); };
+        img.onerror = () => { if (img.src !== K.thumb) img.src = K.thumb; else { K.busy = false; toast("That photo couldn't be loaded for repositioning."); } };
+        img.crossOrigin = "anonymous"; img.src = K.photoUrl || K.thumb; } break;
+    case "post-meal": if (K && !K.posting) postMeal(); break;
+    case "edit-meal": openEditor(findMeal(id)); break;
+    case "rate": if (K){ const [k, v] = id.split(":"), n = +v; K.ratings[k] = K.ratings[k] === n ? 0 : n; renderComposer(); } break;
+  }
+});
+document.addEventListener("change", async e => {
+  const t = e.target;
+  if (t.id === "c-file" && t.files && t.files[0]){
+    K.busy = true; renderComposer();
+    try { const {img} = await loadImg(t.files[0]); initCrop(img); K.thumb = null; K.full = null; }
+    catch(err){ photoError(err); }
+    K.busy = false; renderComposer();
+  }
+  else if (t.id === "pp-file" && t.files && t.files[0]){
+    try { const blob = await squarePhoto(t.files[0]); if (await setAvatar(blob)) toast("Profile picture updated."); }
+    catch(err){ photoError(err); }
+  }
+  else if (t.id === "c-country"){ K.country = t.value; K.dish = ""; if (!K.curManual) K.cur = CUR[K.country] || "EUR"; renderComposer(); }
+  else if (t.id === "c-cur"){ K.cur = t.value; K.curManual = true; }
+  else if (t.id === "c-dish"){ K.dish = t.value; renderComposer(); }
+  else if (t.id === "c-date"){ K.date = t.value; }
+});
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.id === "q"){ cur().q = t.value; renderExploreResults(); }
+  else if (t.id === "mq"){ cur().mq = t.value; renderMapSugg(t.value); }
+  else if (!K) return;
+  else if (t.id === "c-caption") K.caption = t.value;
+  else if (t.id === "c-place") K.place = t.value;
+  else if (t.id === "crop-z" && K.srcImg){ K.crop.z = +t.value; drawCrop(); }
+  else if (t.id === "c-price"){ const had = hasPrice(); K.price = t.value; if (had !== hasPrice()){ renderComposer(); const el = $("#c-price"); if (el) el.focus(); } }
+  else if (t.id === "c-other"){ K.custom = t.value; $("#c-post").disabled = !(K.thumb && K.country && K.custom.trim()); }
+});
+document.addEventListener("submit", e => { if (e.target && e.target.id === "auth-form"){ e.preventDefault(); if (!authBusy) submitAuth(); } });
+document.addEventListener("keydown", e => {
+  if (e.target && e.target.id === "mq"){
+    if (e.key === "Enter"){ e.preventDefault(); const m = mapMatches(e.target.value)[0] || findOnMap(e.target.value, true);
+      if (m) pickOnMap(m.id); else if (e.target.value.trim()) toast("No country on the map matches \"" + e.target.value.trim() + "\"."); }
+    else if (e.key === "Escape"){ const box = $("#mq-sugg"); if (box) box.hidden = true; }
+    else if (e.key === "ArrowDown"){ const f = document.querySelector("#mq-sugg button"); if (f){ e.preventDefault(); f.focus(); } }
+  }
+  else if (e.target && e.target.closest && e.target.closest("#mq-sugg") && (e.key === "ArrowDown" || e.key === "ArrowUp")){
+    e.preventDefault(); const sib = e.key === "ArrowDown" ? e.target.nextElementSibling : e.target.previousElementSibling;
+    if (sib && sib.tagName === "BUTTON") sib.focus(); else if (e.key === "ArrowUp") $("#mq").focus();
+  } if (e.key === "Escape" && !$("#sheet-wrap").hidden) closeSheet(); });
+
+connect();
+render();
+})();
+</script>
+</body>
+</html>
