@@ -1858,7 +1858,7 @@ document.addEventListener("click", e => {
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
       sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
     case "mem-add": addMember($("#mem-email").value); break;
-    case "mem-del": openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(id)+'?</h2><p class="hint">They won\'t be able to see the group any more. Meals they already posted stay.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break;
+    case "mem-del": openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(id)+'?</h2><p class="hint">They won\'t be able to see the group, and they\'ll disappear from the feed and leaderboard. Their meals aren\'t deleted, so adding them back brings everything back.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break;
     case "mem-del-yes": closeSheet(); removeMember(id); break;
     case "mq-pick": pickOnMap(id); break;
     case "cont": cur().cont = id; document.querySelectorAll(".fchip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id))); renderExploreResults(); break;

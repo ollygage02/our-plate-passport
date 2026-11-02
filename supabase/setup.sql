@@ -19,6 +19,12 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.members m where lower(m.email) = lower(auth.jwt() ->> 'email') and m.is_admin);
 $$;
 
+-- Is this account's email still on the members list? Removed members disappear from the group until added back.
+create or replace function public.is_member_uid(uid uuid) returns boolean
+language sql stable security definer set search_path = public, auth as $$
+  select exists (select 1 from auth.users u join public.members m on lower(m.email) = lower(u.email) where u.id = uid);
+$$;
+
 -- Each person's profile: the name friends see, their photo, and dishes saved to try.
 create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
@@ -72,7 +78,7 @@ create policy "admins remove members" on public.members for delete using (public
 drop policy if exists "members read profiles"  on public.profiles;
 drop policy if exists "create own profile"     on public.profiles;
 drop policy if exists "update own profile"     on public.profiles;
-create policy "members read profiles" on public.profiles for select using (public.is_member());
+create policy "members read profiles" on public.profiles for select using (public.is_member() and public.is_member_uid(id));
 create policy "create own profile"    on public.profiles for insert with check (id = auth.uid() and public.is_member());
 create policy "update own profile"    on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 
@@ -80,7 +86,7 @@ drop policy if exists "members read meals"     on public.meals;
 drop policy if exists "log own meals"          on public.meals;
 drop policy if exists "edit own meals"         on public.meals;
 drop policy if exists "delete own meals"       on public.meals;
-create policy "members read meals" on public.meals for select using (public.is_member());
+create policy "members read meals" on public.meals for select using (public.is_member() and public.is_member_uid(user_id));
 create policy "log own meals"      on public.meals for insert with check (user_id = auth.uid() and public.is_member());
 create policy "edit own meals"     on public.meals for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "delete own meals"   on public.meals for delete using (user_id = auth.uid());
@@ -88,7 +94,7 @@ create policy "delete own meals"   on public.meals for delete using (user_id = a
 drop policy if exists "members read likes"     on public.likes;
 drop policy if exists "like as yourself"       on public.likes;
 drop policy if exists "unlike your own"        on public.likes;
-create policy "members read likes" on public.likes for select using (public.is_member());
+create policy "members read likes" on public.likes for select using (public.is_member() and public.is_member_uid(user_id));
 create policy "like as yourself"   on public.likes for insert with check (user_id = auth.uid() and public.is_member());
 create policy "unlike your own"    on public.likes for delete using (user_id = auth.uid());
 
@@ -139,6 +145,8 @@ revoke execute on function public.is_member() from public, anon;
 revoke execute on function public.is_admin() from public, anon;
 grant execute on function public.is_member() to authenticated;
 grant execute on function public.is_admin() to authenticated;
+revoke execute on function public.is_member_uid(uuid) from public, anon;
+grant execute on function public.is_member_uid(uuid) to authenticated;
 
 -- You, as the group's first member and admin. Change this to the email you'll sign in with.
 insert into public.members (email, is_admin) values (lower('YOUR-EMAIL@example.com'), true)
