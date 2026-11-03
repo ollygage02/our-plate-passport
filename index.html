@@ -3,6 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>
+/* Opened from the Home Screen: behave like an app, so the page itself can't be pinched or double-tapped bigger.
+   In a normal browser tab, zoom stays available. */
+(function(){
+  var app = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  if (!app) return;
+  document.documentElement.classList.add("app");
+  var v = document.querySelector('meta[name=viewport]');
+  if (v) v.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover");
+  ["gesturestart","gesturechange","gestureend"].forEach(function(t){ document.addEventListener(t, function(e){ e.preventDefault(); }, {passive:false}); });
+})();
+</script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
 <meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1311" media="(prefers-color-scheme: dark)">
@@ -489,6 +501,8 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0}
 img{max-width:100%}
 body.signed-out .tabs{display:none}
+html.app,html.app body{touch-action:pan-x pan-y;overscroll-behavior-y:none}
+html.app button,html.app a,html.app label{touch-action:manipulation}
 .auth{padding-top:28px;padding-bottom:40px}
 .auth-hero{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .auth-hero p{color:var(--muted);font-size:15px}
