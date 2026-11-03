@@ -1893,7 +1893,8 @@ function viewUser(uid){
           + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span></span>'
           + '<span class="cc-thumbs" aria-hidden="true">'+cms.slice(0, 3).map(m => photoHTML(m, false)).join("")+'</span><span class="chev" aria-hidden="true">›</span></button>';
       }).join("")+'</div>';
-      if (!all) h += '<button class="btn sm cc-more" data-act="allc">Show all '+order.length+' countries</button>';
+      if (!all) h += '<button class="btn sm cc-more" data-act="allc" data-id="1">Show all '+order.length+' countries</button>';
+      else if (order.length > LIMIT + 1) h += '<button class="btn sm cc-more" data-act="allc" data-id="">Show fewer</button>';
     }
   }
   const want = savedOf(uid).filter(id => D[id] && !st.tried[id]);
@@ -2099,7 +2100,8 @@ document.addEventListener("click", e => {
     case "ucountry": closeSheet(); if (t.dataset.uid && C[id]) go({v:"ucountry", id, uid:t.dataset.uid}); else go({v:"country", id}); break;
     case "ctab": cur().tab = id; render(); break;
     case "pview": cur().pview = id; render(); break;
-    case "allc": cur().allc = true; render(); break;
+    case "allc": { const sy = window.scrollY, rows = document.querySelector(".cc-list"), top = rows ? rows.getBoundingClientRect().top + sy : sy;
+      cur().allc = !!id; render(); if (!id && sy > top) window.scrollTo(0, Math.max(0, top - 120)); break; }
     case "mz": if (mapCtl) mapCtl.button(id); break;
     case "sign-out": closeSheet(); sb.auth.signOut(); break;
     case "settings": closeSheet(); if (cur().v !== "settings") go({v:"settings"}); break;
