@@ -442,8 +442,8 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
-.d-row.pick{text-align:left;cursor:pointer;transition:background .15s}
-.d-row.pick.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.d-row.dpick{text-align:left;cursor:pointer;transition:background .15s}
+.d-row.dpick.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
 .uc-tip{margin-bottom:-4px}
 .gal .tile{transition:opacity .2s}
 .gal .tile.dim{opacity:.3}
@@ -1923,7 +1923,7 @@ function viewUserCountry(uid, code){
     + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span></div>';
   h += '<div class="section-h"><h2>Must-try list</h2><span>'+n+'/'+c.dishes.length+'</span></div><div class="d-list">'
     + c.dishes.map(d => { const when = t[d.id], dm = ms.filter(m => m.dish === d.id), best = dm.reduce((a, m) => Math.max(a, +m.rating || 0), 0);
-        const open = canPick(d) ? '<button class="d-row static pick'+(hl === d.id ? ' sel' : '')+'" data-act="uc-hl" data-id="'+d.id+'" aria-pressed="'+(hl === d.id)+'">' : '<div class="d-row static">';
+        const open = canPick(d) ? '<button class="d-row static dpick'+(hl === d.id ? ' sel' : '')+'" data-act="uc-hl" data-id="'+d.id+'" aria-pressed="'+(hl === d.id)+'">' : '<div class="d-row static">';
         return open+'<span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'
           + (when ? (isDrink(d.id) ? 'Drunk ' : 'Eaten ')+fmtDate(when)+(best ? ' · '+best.toFixed(1)+' ★' : '')+(dm.length > 1 ? ' · '+dm.length+' times' : '') : 'Not yet')+'</small></span>'
           + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+(canPick(d) ? '</button>' : '</div>'); }).join("")
@@ -1939,7 +1939,7 @@ function viewUserCountry(uid, code){
 /* tapping a dish on someone's country page rings its photos */
 function applyUcHl(scroll){
   const hl = cur().hl || null; let first = null;
-  document.querySelectorAll(".d-row.pick").forEach(b => { const on = b.dataset.id === hl; b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on); });
+  document.querySelectorAll(".d-row.dpick").forEach(b => { const on = b.dataset.id === hl; b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on); });
   document.querySelectorAll(".gal .tile[data-dish]").forEach(t => { const on = !!hl && t.dataset.dish === hl; t.classList.toggle("hl", on); t.classList.toggle("dim", !!hl && !on); if (on && !first) first = t; });
   if (scroll && first){ const r = first.getBoundingClientRect(); if (r.top < 70 || r.bottom > innerHeight - 90) first.scrollIntoView({behavior:"smooth", block:"center"}); }
 }
