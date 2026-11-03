@@ -509,6 +509,13 @@ body.signed-out .tabs{display:none}
 .set-row .t{min-width:0}
 .set-row .t b{display:block}
 .set-row .t small{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.grp{gap:10px}
+.grp-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.grp h3{font-size:17px;font-weight:700}
+.grp .link{font-size:14px;font-weight:600;color:var(--accent)}
+.grp-foot{display:flex;justify-content:flex-end}
+.mem b{font-weight:600}
+.gpick{margin-bottom:-4px}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -1023,8 +1030,10 @@ const CFG = window.OPP_CONFIG || {};
 const configured = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && !/YOUR-/.test(CFG.supabaseUrl + CFG.supabaseAnonKey));
 const sb = window.supabase && configured ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
 let mode = "connecting";   /* connecting | setup | signedout | notmember | shared */
-let me = null, myEmail = "", isOwner = false, authBusy = false, authMsg = "", authView = "signin", askedNick = false;
-let MEALS = [], PEOPLE = {}, MEMBERS = [];
+let me = null, myEmail = "", isOwner = false /* admin of at least one group */, authBusy = false, authMsg = "", authView = "signin", askedNick = false;
+let MEALS = [], PEOPLE = {}, GROUPS = [];
+/* which group the feed and leaderboard show: "all" or a group id (remembered on this device) */
+let groupSel = (() => { try { return localStorage.getItem("opp-group") || "all"; } catch(e) { return "all"; } })();
 const canWrite = () => mode === "shared";
 const pubUrl = path => path && sb ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : "";
 const ownUrl = u => typeof u === "string" && !!CFG.supabaseUrl && u.indexOf(CFG.supabaseUrl) === 0;
@@ -1043,11 +1052,10 @@ async function startSession(session){
   if (uid && uid === sessionFor && mode === "shared") return;
   sessionFor = uid;
   if (liveChannel){ sb.removeChannel(liveChannel); liveChannel = null; }
-  if (!uid){ me = null; myEmail = ""; MEALS = []; PEOPLE = {}; MEMBERS = []; mode = "signedout"; authView = "signin"; authMsg = ""; stack = [{v:"feed"}]; render(); return; }
+  if (!uid){ me = null; myEmail = ""; MEALS = []; PEOPLE = {}; GROUPS = []; mode = "signedout"; authView = "signin"; authMsg = ""; stack = [{v:"feed"}]; render(); return; }
   me = uid; myEmail = (session.user.email || "").toLowerCase(); mode = "connecting"; render();
-  const mem = await sb.from("members").select("email,is_admin");
-  if (mem.error || !(mem.data || []).some(x => x.email.toLowerCase() === myEmail)){ mode = "notmember"; render(); return; }
-  MEMBERS = mem.data; isOwner = MEMBERS.some(x => x.email.toLowerCase() === myEmail && x.is_admin);
+  const mem = await sb.from("group_members").select("group_id").eq("email", myEmail);
+  if (mem.error || !(mem.data || []).length){ mode = "notmember"; render(); return; }
   await sb.from("profiles").upsert({id:me}, {onConflict:"id", ignoreDuplicates:true});
   mode = "shared";
   await refresh();
@@ -1056,7 +1064,8 @@ async function startSession(session){
     .on("postgres_changes", {event:"*", schema:"public", table:"meals"}, scheduleRefresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"likes"}, scheduleRefresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"profiles"}, scheduleRefresh)
-    .on("postgres_changes", {event:"*", schema:"public", table:"members"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"groups"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"group_members"}, scheduleRefresh)
     .subscribe();
   if (!(PEOPLE[me] && PEOPLE[me].nick) && !askedNick){ askedNick = true; askNick(); }
 }
@@ -1064,11 +1073,12 @@ let refreshT = null;
 function scheduleRefresh(){ clearTimeout(refreshT); refreshT = setTimeout(refresh, 300); }
 async function refresh(){
   if (mode !== "shared") return;
-  const [m, p, l, mem] = await Promise.all([
+  const [m, p, l, g, gm] = await Promise.all([
     sb.from("meals").select("*").order("created_at", {ascending:false}).limit(3000),
     sb.from("profiles").select("*"),
     sb.from("likes").select("meal_id,user_id"),
-    sb.from("members").select("email,is_admin").order("email")]);
+    sb.from("groups").select("id,name,created_by,created_at"),
+    sb.from("group_members").select("group_id,email,role,added_at")]);
   if (m.error || p.error){ toast("Couldn't load your group's meals. Check your connection and reload."); return; }
   const likes = {};
   (l.data || []).forEach(x => { (likes[x.meal_id] = likes[x.meal_id] || {})[x.user_id] = true; });
@@ -1076,8 +1086,15 @@ async function refresh(){
     ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
     photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), likes:likes[r.id] || {}, created:r.created_at}));
   PEOPLE = {};
-  p.data.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path}; });
-  if (!mem.error) MEMBERS = mem.data;
+  p.data.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path, email:(r.email || "").toLowerCase()}; });
+  if (!g.error && !gm.error){
+    GROUPS = g.data.map(x => ({id:x.id, name:x.name, created_by:x.created_by, members:gm.data.filter(y => y.group_id === x.id)
+      .sort((a, b) => (b.role === "admin") - (a.role === "admin") || a.added_at.localeCompare(b.added_at))})).filter(x => x.members.some(y => y.email === myEmail))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    isOwner = GROUPS.some(amAdmin);
+    if (!GROUPS.length){ mode = "notmember"; MEALS = []; PEOPLE = {}; render(); return; }
+    if (groupSel !== "all" && !GROUPS.some(x => x.id === groupSel)) setGroupSel("all");
+  }
   render();
 }
 const nameOf = uid => (PEOPLE[uid] && PEOPLE[uid].nick) || (uid === me ? "You" : "A friend");
@@ -1093,7 +1110,15 @@ const mealsOf = uid => MEALS.filter(m => m.uid === uid).sort((a,b) => (b.date ||
 function triedMap(uid){ const t = {}; mealsOf(uid).forEach(m => { if (m.dish && D[m.dish] && (!t[m.dish] || m.date < t[m.dish])) t[m.dish] = m.date; }); return t; }
 function statsFor(uid){ const ms = mealsOf(uid), t = triedMap(uid); return {photos:ms.length, dishes:Object.keys(t).length, countries:new Set(ms.map(m => m.country)).size, tried:t}; }
 const likeCount = m => Object.values(m.likes || {}).filter(Boolean).length;
-const friends = () => Object.keys(PEOPLE).filter(id => id !== me);
+/* groups */
+const amAdmin = g => g.members.some(x => x.email === myEmail && x.role === "admin");
+const groupById = id => GROUPS.find(g => g.id === id);
+const uidByEmail = email => Object.keys(PEOPLE).find(id => PEOPLE[id].email === email);
+function uidsIn(gid){ const g = groupById(gid); return new Set(g ? g.members.map(x => uidByEmail(x.email)).filter(Boolean) : []); }
+function inSel(uid){ return groupSel === "all" || uid === me || uidsIn(groupSel).has(uid); }
+function setGroupSel(v){ groupSel = v; try { localStorage.setItem("opp-group", v); } catch(e) {} }
+const selName = () => groupSel === "all" ? (GROUPS.length > 1 ? "All groups" : (GROUPS[0] ? GROUPS[0].name : "Your group")) : (groupById(groupSel) || {name:"Your group"}).name;
+const friends = () => Object.keys(PEOPLE).filter(id => id !== me && inSel(id));
 
 /* ---------- Writes ---------- */
 function writeFailed(e){
@@ -1151,23 +1176,43 @@ async function setAvatar(blob){
     await refresh(); return true;
   } catch(e){ writeFailed(e); return false; }
 }
-async function addMember(email){
+const okEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+async function addMember(gid, email){
   email = (email || "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("That doesn't look like an email address."); return; }
-  const {error} = await sb.from("members").insert({email});
-  if (error){ toast(/duplicate|unique/i.test(error.message) ? "That email is already in the group." : "Couldn't add that email. Only group admins can add people."); return; }
-  toast(email + " can now create an account."); await refresh();
+  if (!okEmail(email)){ toast("That doesn't look like an email address."); return; }
+  const {error} = await sb.from("group_members").insert({group_id:gid, email});
+  if (error){ toast(/duplicate|unique/i.test(error.message) ? "That email is already in this group." : "Couldn't add that email. Only the group's admin can add people."); return; }
+  const g = groupById(gid); toast(email + " added to " + (g ? g.name : "the group") + "."); await refresh();
 }
-async function removeMember(email){
-  const {error} = await sb.from("members").delete().eq("email", email);
+async function removeMember(gid, email){
+  const {error} = await sb.from("group_members").delete().eq("group_id", gid).eq("email", email);
   if (error){ writeFailed(error); return; }
-  toast(email + " removed from the group."); await refresh();
+  toast(email === myEmail ? "You've left the group." : email + " removed."); await refresh();
+}
+async function createGroup(name){
+  name = (name || "").trim().slice(0, 40);
+  if (!name){ toast("Give the group a name first."); return false; }
+  const id = newId();
+  const {error} = await sb.from("groups").insert({id, name, created_by:me});
+  if (error){ writeFailed(error); return false; }
+  toast(name + " created. Add people to it below."); await refresh(); return id;
+}
+async function renameGroup(gid, name){
+  name = (name || "").trim().slice(0, 40); if (!name){ toast("Give the group a name first."); return; }
+  const {error} = await sb.from("groups").update({name}).eq("id", gid);
+  if (error){ writeFailed(error); return; }
+  toast("Renamed to " + name + "."); await refresh();
+}
+async function deleteGroup(gid){
+  const {error} = await sb.from("groups").delete().eq("id", gid);
+  if (error){ writeFailed(error); return; }
+  toast("Group deleted. Everyone's meals are still there."); await refresh();
 }
 
 /* ---------- Signing in ---------- */
 function viewAuth(){
   if (mode === "setup") return '<div class="stack auth"><div class="empty-state"><p><b style="color:var(--fg)">Not connected yet.</b></p><p>This site still needs its Supabase details in config.js.</p></div></div>';
-  if (mode === "notmember") return '<div class="stack auth"><div class="auth-card"><h2>Not in the group yet</h2><p>You\'re signed in as <b>'+esc(myEmail)+'</b>, but that email hasn\'t been added to the group.</p><p class="hint">Ask whoever set up your group to add it in their Passport, under Group members. Then sign in again.</p><button class="btn" data-act="sign-out">Sign out</button></div></div>';
+  if (mode === "notmember") return '<div class="stack auth"><div class="auth-card"><h2>Not in a group yet</h2><p>You\'re signed in as <b>'+esc(myEmail)+'</b>, but that email isn\'t in any group.</p><p class="hint">Ask a friend to add it to one of their groups (Settings, Your groups). Then sign in again.</p><button class="btn" data-act="sign-out">Sign out</button></div></div>';
   const up = authView === "signup", forgot = authView === "forgot";
   return '<div class="stack auth"><div class="auth-hero"><span class="wordmark"><span class="dot"></span>Our Plate Passport</span><p>Must-try dishes around the world, and your group\'s meal photos.</p></div>'
    + '<form class="auth-card" id="auth-form" novalidate><h2>'+(forgot ? 'Reset your password' : up ? 'Create your account' : 'Sign in')+'</h2>'
@@ -1192,7 +1237,7 @@ async function submitAuth(){
   const err = res.error;
   if (err){
     const m = err.message || "";
-    authMsg = /Database error saving new user|not been added/i.test(m) ? "That email hasn't been added to the group yet. Ask whoever runs your group to add it."
+    authMsg = /Database error saving new user|not been added/i.test(m) ? "That email hasn't been added to a group yet. Ask a friend to add it to one of their groups."
       : /Invalid login credentials/i.test(m) ? "That email and password don't match."
       : /already registered/i.test(m) ? "There's already an account with that email. Sign in instead."
       : /Password should be/i.test(m) ? "Use a password of at least 8 characters."
@@ -1213,13 +1258,18 @@ function askNewPassword(){
    + '<div class="field"><label class="label" for="newpass">New password</label><input id="newpass" type="password" autocomplete="new-password" minlength="8"></div>'
    + '<button class="btn primary" data-act="save-pass">Save password</button></div>');
 }
-function membersHTML(){
-  if (!isOwner) return '';
-  return '<div class="section-h"><h2>Group members</h2><span>'+MEMBERS.length+'</span></div><section class="guide">'
-   + '<p class="hint">Only these email addresses can create an account and see the group. Add a friend, then send them this site\'s address.</p>'
-   + '<div class="mem-list">'+MEMBERS.map(x => '<div class="mem"><span>'+esc(x.email)+(x.is_admin ? ' <small>admin</small>' : '')+'</span>'
-       + (x.email.toLowerCase() === myEmail ? '' : '<button class="link-del" data-act="mem-del" data-id="'+esc(x.email)+'">Remove</button>')+'</div>').join("")+'</div>'
-   + '<div class="inline-form"><div class="field"><label class="label" for="mem-email">Add an email</label><input id="mem-email" type="email" placeholder="friend@example.com" autocomplete="off"></div><button class="btn primary" data-act="mem-add">Add</button></div></section>';
+function groupsHTML(){
+  let h = '<div class="section-h"><h2>Your groups</h2><span>'+GROUPS.length+'</span></div>';
+  h += GROUPS.map(g => { const admin = amAdmin(g);
+    return '<section class="guide grp"><div class="grp-h"><h3>'+esc(g.name)+'</h3>'+(admin ? '<button class="link" data-act="grp-rename" data-id="'+esc(g.id)+'">Rename</button>' : '')+'</div>'
+     + '<div class="mem-list">'+g.members.map(x => { const uid = uidByEmail(x.email), nick = uid && PEOPLE[uid].nick;
+         return '<div class="mem"><span>'+(nick ? '<b>'+esc(nick)+'</b> ' : '')+esc(x.email)+(x.role === "admin" ? ' <small>admin</small>' : '')+(uid ? '' : ' <small>invited</small>')+'</span>'
+           + (admin && x.email !== myEmail ? '<button class="link-del" data-act="mem-del" data-id="'+esc(g.id+"|"+x.email)+'">Remove</button>' : '')+'</div>'; }).join("")+'</div>'
+     + (admin ? '<div class="inline-form"><div class="field"><label class="label" for="mem-'+esc(g.id)+'">Add someone by email</label><input id="mem-'+esc(g.id)+'" type="email" placeholder="name@example.com" autocomplete="off"></div><button class="btn primary" data-act="mem-add" data-id="'+esc(g.id)+'">Add</button></div>' : '')
+     + '<div class="grp-foot">'+(admin ? '<button class="btn sm" data-act="grp-del" data-id="'+esc(g.id)+'">Delete group</button>' : '<button class="btn sm" data-act="grp-leave" data-id="'+esc(g.id)+'">Leave group</button>')+'</div></section>'; }).join("");
+  h += '<section class="guide grp"><h3>Start a new group</h3><p class="hint">For family, a trip crew or another set of friends. You\'ll be its admin and can add people by email. They create an account with that email, then see everyone they share a group with.</p>'
+    + '<div class="inline-form"><div class="field"><label class="label" for="new-group">Group name</label><input id="new-group" type="text" maxlength="40" placeholder="e.g. Family" autocomplete="off"></div><button class="btn primary" data-act="grp-new">Create</button></div></section>';
+  return h;
 }
 
 
@@ -1227,7 +1277,7 @@ function membersHTML(){
 function viewSettings(){
   let h = '<div class="stack">';
   if (typeof notifHTML === "function") h += notifHTML();
-  h += membersHTML();
+  h += groupsHTML();
   h += '<div class="section-h"><h2>Your account</h2></div><section class="guide set-acc">'
     + '<div class="set-row">'+avatar(me)+'<span class="t"><b>'+esc(nameOf(me))+'</b><small>'+esc(myEmail)+'</small></span></div>'
     + '<p class="hint">Change your name and profile photo at the top of your Passport.</p>'
@@ -1235,7 +1285,11 @@ function viewSettings(){
   return h + '</div>';
 }
 function settingsLink(){
-  return '<button class="set-link" data-act="settings">'+I.gear+'<span class="t"><b>Settings</b><small>'+(isOwner ? 'Notifications, group members, password, sign out' : 'Notifications, password, sign out')+'</small></span><span class="chev" aria-hidden="true">›</span></button>';
+  return '<button class="set-link" data-act="settings">'+I.gear+'<span class="t"><b>Settings</b><small>'+'Notifications, groups, password, sign out'+'</small></span><span class="chev" aria-hidden="true">›</span></button>';
+}
+function groupPicker(){
+  if (GROUPS.length < 2) return '';
+  return '<div class="fchips gpick" role="group" aria-label="Show group">'+[["all","All groups"]].concat(GROUPS.map(g => [g.id, g.name])).map(([id, n]) => '<button class="fchip" data-act="gsel" data-id="'+esc(id)+'" aria-pressed="'+(groupSel === id)+'">'+esc(n)+'</button>').join("")+'</div>';
 }
 
 
@@ -1440,16 +1494,16 @@ function render(){
 
 /* ---------- Views ---------- */
 function viewFeed(){
-  const feed = MEALS.slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.created || "").localeCompare(a.created || ""));
-  let h = '<div class="stack">' + statusLine();
+  const feed = MEALS.filter(m => inSel(m.uid)).sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.created || "").localeCompare(a.created || ""));
+  let h = '<div class="stack">' + statusLine() + groupPicker();
   if (mode !== "connecting" && feed.length === 0){
     h += '<div class="empty-state"><p><b style="color:var(--fg)">No meals yet.</b></p><p>Log the first one, and it shows up here for everyone you share this passport with.</p><button class="btn primary" data-act="log" data-id="">'+I.camera+'Log a meal</button></div>';
   }
-  if (mode === "shared" && friends().length === 0 && isOwner){
-    h += '<section class="guide"><h3 style="font-size:17px;font-weight:600">Add your friends</h3><p class="hint">Add their email addresses under Settings, Group members, then send them this site\'s address. They create an account with that email.</p><button class="btn" data-act="settings" style="align-self:flex-start">Go to Group members</button></section>';
+  if (mode === "shared" && friends().length === 0){
+    h += '<section class="guide"><h3 style="font-size:17px;font-weight:600">Add your friends</h3><p class="hint">Add their email addresses to one of your groups in Settings, then send them this site\'s address. They create an account with that email.</p><button class="btn" data-act="settings" style="align-self:flex-start">Go to Settings</button></section>';
   }
   if (friends().length){
-    h += '<div class="section-h"><h2>Your group</h2><span>'+(friends().length + 1)+' people</span></div><div class="people">'
+    h += '<div class="section-h"><h2>'+esc(selName())+'</h2><span>'+(friends().length + 1)+' people</span></div><div class="people">'
       + [me].concat(friends()).map(id => { const st = statsFor(id);
           return '<button class="person" data-act="user" data-id="'+esc(id)+'">'+avatar(id, "lg")+'<b>'+esc(shortName(id))+'</b><small>'+st.dishes+' dish'+(st.dishes === 1 ? '' : 'es')+' · '+st.countries+' countr'+(st.countries === 1 ? 'y' : 'ies')+'</small></button>'; }).join("") + '</div>';
   }
@@ -1780,7 +1834,7 @@ function viewUser(uid){
   h += want.length ? '<div class="d-list">'+want.map(id => dishRow(D[id], triedMap(me))).join("")+'</div>' : '<p class="hint">'+(isMe ? 'Tap "Want to try" on any dish to save it for a trip.' : 'Nothing saved yet.')+'</p>';
   if (isMe && friends().length){
     const board = [me].concat(friends()).map(id => ({id, s:statsFor(id)})).sort((a,b) => b.s.dishes - a.s.dishes || b.s.countries - a.s.countries);
-    h += '<div class="section-h"><h2>Group leaderboard</h2><span>Must-trys eaten</span></div><div class="board">'
+    h += '<div class="section-h"><h2>Leaderboard</h2><span>'+esc(selName())+' · must-trys eaten</span></div><div class="board">'
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
   if (isMe) h += settingsLink();
@@ -1986,9 +2040,21 @@ document.addEventListener("click", e => {
     case "save-nick1": { const v = ($("#nick1").value || "").trim().slice(0, 30); if (!v){ toast("Add a name first."); break; } closeSheet(); setPerson({nick:v}); toast("Welcome, " + v + "!"); break; }
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
       sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
-    case "mem-add": addMember($("#mem-email").value); break;
-    case "mem-del": openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(id)+'?</h2><p class="hint">They won\'t be able to see the group, and they\'ll disappear from the feed and leaderboard. Their meals aren\'t deleted, so adding them back brings everything back.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break;
-    case "mem-del-yes": closeSheet(); removeMember(id); break;
+    case "gsel": setGroupSel(id); render(); break;
+    case "mem-add": addMember(id, ($("#mem-" + id) || {}).value); break;
+    case "mem-del": { const [gid, email] = id.split("|"), g = groupById(gid) || {name:"the group"};
+      openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(email)+' from '+esc(g.name)+'?</h2><p class="hint">If they aren\'t in any of your other groups, their meals disappear from your feed. Nothing is deleted, so adding them back brings everything back.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break; }
+    case "mem-del-yes": { closeSheet(); const [gid, email] = id.split("|"); removeMember(gid, email); break; }
+    case "grp-new": createGroup(($("#new-group") || {}).value); break;
+    case "grp-rename": { const g = groupById(id); if (!g) break;
+      openSheet('<div class="stack"><h2 style="font-size:20px">Rename group</h2><div class="field"><label class="label" for="grp-name">Group name</label><input id="grp-name" type="text" maxlength="40" value="'+esc(g.name)+'"></div><button class="btn primary" data-act="grp-rename-save" data-id="'+esc(id)+'">Save</button></div>'); break; }
+    case "grp-rename-save": { const v = ($("#grp-name") || {}).value; closeSheet(); renameGroup(id, v); break; }
+    case "grp-del": { const g = groupById(id); if (!g) break;
+      openSheet('<div class="stack"><h2 style="font-size:20px">Delete '+esc(g.name)+'?</h2><p class="hint">The group goes for everyone in it. Their accounts and meals stay, and anyone who shares another group with you still shows up.</p><div class="row-btns"><button class="btn" data-act="close">Keep it</button><button class="btn primary" data-act="grp-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Delete group</button></div></div>'); break; }
+    case "grp-del-yes": closeSheet(); deleteGroup(id); break;
+    case "grp-leave": { const g = groupById(id); if (!g) break;
+      openSheet('<div class="stack"><h2 style="font-size:20px">Leave '+esc(g.name)+'?</h2><p class="hint">'+(GROUPS.length === 1 ? 'This is your only group, so you won\'t be able to see anything until someone adds you to a group again.' : 'You\'ll stop seeing people you only share this group with.')+'</p><div class="row-btns"><button class="btn" data-act="close">Stay</button><button class="btn primary" data-act="grp-leave-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Leave</button></div></div>'); break; }
+    case "grp-leave-yes": closeSheet(); removeMember(id, myEmail); break;
     case "notif-on": enablePush(); break;
     case "notif-off": disablePush(); break;
     case "notif-pref": setNotifyPref(id, !!t.checked); break;

@@ -185,3 +185,149 @@ create table if not exists public.push_config (
 );
 alter table public.push_config enable row level security;
 revoke all on public.push_config from anon, authenticated;
+-- ---------- Groups ----------
+-- People belong to one or more named groups (Family, Friends...). You see the meals and
+-- profiles of everyone you share at least one group with. Anyone in a group can start a new one.
+
+create table if not exists public.groups (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (char_length(btrim(name)) between 1 and 40),
+  created_by  uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.group_members (
+  group_id  uuid not null references public.groups (id) on delete cascade,
+  email     text not null check (email = lower(btrim(email))),
+  role      text not null default 'member' check (role in ('admin','member')),
+  added_at  timestamptz not null default now(),
+  primary key (group_id, email)
+);
+create index if not exists group_members_email_idx on public.group_members (email);
+
+-- profiles carry the account email so the app can tell who is in which group
+alter table public.profiles add column if not exists email text;
+create or replace function public.profile_email() returns trigger
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  new.email := (select lower(u.email) from auth.users u where u.id = new.id);
+  return new;
+end;
+$$;
+drop trigger if exists profile_email on public.profiles;
+create trigger profile_email before insert or update on public.profiles
+  for each row execute function public.profile_email();
+update public.profiles p set email = lower(u.email) from auth.users u where u.id = p.id;
+
+-- helpers used by the privacy rules
+create or replace function public.my_email() returns text
+language sql stable as $$ select lower(auth.jwt() ->> 'email'); $$;
+
+create or replace function public.is_member() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.group_members gm where gm.email = public.my_email());
+$$;
+
+create or replace function public.is_in_group(gid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.group_members gm where gm.group_id = gid and gm.email = public.my_email());
+$$;
+
+create or replace function public.is_group_admin(gid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.group_members gm where gm.group_id = gid and gm.email = public.my_email() and gm.role = 'admin');
+$$;
+
+create or replace function public.shares_group(uid uuid) returns boolean
+language sql stable security definer set search_path = public, auth as $$
+  select exists (
+    select 1 from public.group_members mine
+    join public.group_members theirs on theirs.group_id = mine.group_id
+    join auth.users u on lower(u.email) = theirs.email
+    where mine.email = public.my_email() and u.id = uid);
+$$;
+
+-- whoever creates a group is its first admin
+create or replace function public.group_creator_joins() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_email() is not null then
+    insert into public.group_members (group_id, email, role) values (new.id, public.my_email(), 'admin')
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists group_creator_joins on public.groups;
+create trigger group_creator_joins after insert on public.groups
+  for each row execute function public.group_creator_joins();
+
+-- privacy rules for groups
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+drop policy if exists "see your groups"      on public.groups;
+drop policy if exists "start a group"        on public.groups;
+drop policy if exists "admins rename"        on public.groups;
+drop policy if exists "admins delete"        on public.groups;
+create policy "see your groups" on public.groups for select using (public.is_in_group(id));
+create policy "start a group"   on public.groups for insert with check (public.is_member() and created_by = auth.uid());
+create policy "admins rename"   on public.groups for update using (public.is_group_admin(id)) with check (public.is_group_admin(id));
+create policy "admins delete"   on public.groups for delete using (public.is_group_admin(id));
+
+drop policy if exists "see group members"    on public.group_members;
+drop policy if exists "admins add people"    on public.group_members;
+drop policy if exists "admins remove, members leave" on public.group_members;
+create policy "see group members" on public.group_members for select using (public.is_in_group(group_id));
+create policy "admins add people" on public.group_members for insert with check (public.is_group_admin(group_id) and role = 'member');
+create policy "admins remove, members leave" on public.group_members for delete using (
+  (public.is_group_admin(group_id) and email <> public.my_email())
+  or (email = public.my_email() and role = 'member'));
+
+-- you see profiles, meals and likes of people you share a group with
+drop policy if exists "members read profiles" on public.profiles;
+drop policy if exists "members read meals"    on public.meals;
+drop policy if exists "members read likes"    on public.likes;
+create policy "members read profiles" on public.profiles for select using (public.shares_group(id));
+create policy "members read meals"    on public.meals    for select using (public.shares_group(user_id));
+create policy "members read likes"    on public.likes    for select using (exists (select 1 from public.meals m where m.id = likes.meal_id));
+
+-- only people invited to some group can create an account
+create or replace function public.only_members_sign_up() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.group_members gm where gm.email = lower(new.email)) then
+    raise exception 'This email has not been added to a group yet';
+  end if;
+  return new;
+end;
+$$;
+
+-- helpers are for the rules above, not to be called from outside
+revoke execute on function public.profile_email() from public, anon, authenticated;
+revoke execute on function public.group_creator_joins() from public, anon, authenticated;
+revoke execute on function public.is_in_group(uuid) from public, anon;
+revoke execute on function public.is_group_admin(uuid) from public, anon;
+revoke execute on function public.shares_group(uuid) from public, anon;
+grant execute on function public.is_in_group(uuid) to authenticated;
+grant execute on function public.is_group_admin(uuid) to authenticated;
+grant execute on function public.shares_group(uuid) to authenticated;
+
+-- live updates
+do $$
+declare t text;
+begin
+  foreach t in array array['groups','group_members'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+-- move the existing members list into a first group called "Friends"
+insert into public.groups (id, name, created_by)
+select '00000000-0000-4000-8000-000000000001'::uuid, 'Friends', (select u.id from auth.users u join public.members m on lower(m.email) = lower(u.email) where m.is_admin limit 1)
+where not exists (select 1 from public.groups);
+insert into public.group_members (group_id, email, role)
+select '00000000-0000-4000-8000-000000000001'::uuid, lower(m.email), case when m.is_admin then 'admin' else 'member' end
+from public.members m
+where exists (select 1 from public.groups g where g.id = '00000000-0000-4000-8000-000000000001'::uuid)
+on conflict do nothing;

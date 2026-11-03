@@ -31,10 +31,12 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
 
-  // Only current group members can send, and only to current group members.
-  const { data: members } = await admin.from("members").select("email");
-  const memberEmails = new Set((members ?? []).map((m) => String(m.email).toLowerCase()));
-  if (!memberEmails.has(String(caller.email).toLowerCase())) return json({ error: "Not in the group" }, 403);
+  // Only people in a group can send, and only to people they share a group with.
+  const callerEmail = String(caller.email).toLowerCase();
+  const { data: gm } = await admin.from("group_members").select("group_id,email");
+  const myGroups = new Set((gm ?? []).filter((r) => r.email === callerEmail).map((r) => r.group_id));
+  if (!myGroups.size) return json({ error: "Not in a group" }, 403);
+  const memberEmails = new Set((gm ?? []).filter((r) => myGroups.has(r.group_id)).map((r) => String(r.email).toLowerCase()));
 
   let input: Record<string, unknown>;
   try { input = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
@@ -55,7 +57,7 @@ Deno.serve(async (req) => {
     if (!like) return json({ error: "No like found" }, 403);
   }
 
-  // Map account ids to emails so removed members are left out.
+  // Map account ids to emails: only people sharing a group with the sender.
   const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
   const inGroup = new Set((list?.users ?? []).filter((u) => memberEmails.has(String(u.email).toLowerCase())).map((u) => u.id));
 
