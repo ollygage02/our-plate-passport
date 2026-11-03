@@ -516,6 +516,8 @@ body.signed-out .tabs{display:none}
 .grp-foot{display:flex;justify-content:flex-end}
 .mem b{font-weight:600}
 .gpick{margin-bottom:-4px}
+.board-sel{font:inherit;font-size:13.5px;font-weight:600;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding:5px 30px 5px 12px;max-width:60%;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.board-note{color:var(--muted);font-size:13px}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -1034,6 +1036,8 @@ let me = null, myEmail = "", isOwner = false /* admin of at least one group */, 
 let MEALS = [], PEOPLE = {}, GROUPS = [];
 /* which group the feed and leaderboard show: "all" or a group id (remembered on this device) */
 let groupSel = (() => { try { return localStorage.getItem("opp-group") || "all"; } catch(e) { return "all"; } })();
+/* the leaderboard has its own group filter */
+let boardSel = (() => { try { return localStorage.getItem("opp-board") || "all"; } catch(e) { return "all"; } })();
 const canWrite = () => mode === "shared";
 const pubUrl = path => path && sb ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : "";
 const ownUrl = u => typeof u === "string" && !!CFG.supabaseUrl && u.indexOf(CFG.supabaseUrl) === 0;
@@ -1094,6 +1098,7 @@ async function refresh(){
     isOwner = GROUPS.some(amAdmin);
     if (!GROUPS.length){ mode = "notmember"; MEALS = []; PEOPLE = {}; render(); return; }
     if (groupSel !== "all" && !GROUPS.some(x => x.id === groupSel)) setGroupSel("all");
+    if (boardSel !== "all" && !GROUPS.some(x => x.id === boardSel)) setBoardSel("all");
   }
   render();
 }
@@ -1115,7 +1120,10 @@ const amAdmin = g => g.members.some(x => x.email === myEmail && x.role === "admi
 const groupById = id => GROUPS.find(g => g.id === id);
 const uidByEmail = email => Object.keys(PEOPLE).find(id => PEOPLE[id].email === email);
 function uidsIn(gid){ const g = groupById(gid); return new Set(g ? g.members.map(x => uidByEmail(x.email)).filter(Boolean) : []); }
-function inSel(uid){ return groupSel === "all" || uid === me || uidsIn(groupSel).has(uid); }
+function inGroupSel(sel, uid){ return sel === "all" || uid === me || uidsIn(sel).has(uid); }
+function inSel(uid){ return inGroupSel(groupSel, uid); }
+function setBoardSel(v){ boardSel = v; try { localStorage.setItem("opp-board", v); } catch(e) {} }
+const boardPeople = () => Object.keys(PEOPLE).filter(id => id !== me && inGroupSel(boardSel, id));
 function setGroupSel(v){ groupSel = v; try { localStorage.setItem("opp-group", v); } catch(e) {} }
 const selName = () => groupSel === "all" ? (GROUPS.length > 1 ? "All groups" : (GROUPS[0] ? GROUPS[0].name : "Your group")) : (groupById(groupSel) || {name:"Your group"}).name;
 const friends = () => Object.keys(PEOPLE).filter(id => id !== me && inSel(id));
@@ -1291,6 +1299,11 @@ function groupPicker(){
   if (GROUPS.length < 2) return '';
   return '<div class="fchips gpick" role="group" aria-label="Show group">'+[["all","All groups"]].concat(GROUPS.map(g => [g.id, g.name])).map(([id, n]) => '<button class="fchip" data-act="gsel" data-id="'+esc(id)+'" aria-pressed="'+(groupSel === id)+'">'+esc(n)+'</button>').join("")+'</div>';
 }
+function boardPicker(){
+  if (GROUPS.length < 2) return '<span class="board-note">Must-trys eaten</span>';
+  return '<select class="board-sel" id="board-sel" aria-label="Leaderboard group">'+[["all","All groups"]].concat(GROUPS.map(g => [g.id, g.name])).map(([id, n]) => '<option value="'+esc(id)+'"'+(boardSel === id ? ' selected' : '')+'>'+esc(n)+'</option>').join("")+'</select>';
+}
+document.addEventListener("change", e => { if (e.target && e.target.id === "board-sel"){ setBoardSel(e.target.value); render(); } });
 
 
 /* ---------- Notifications (web push) ---------- */
@@ -1832,9 +1845,9 @@ function viewUser(uid){
   const want = savedOf(uid).filter(id => D[id] && !st.tried[id]);
   h += '<div class="section-h"><h2>'+(isMe ? 'Want to try' : 'Wants to try')+'</h2><span>'+want.length+'</span></div>';
   h += want.length ? '<div class="d-list">'+want.map(id => dishRow(D[id], triedMap(me))).join("")+'</div>' : '<p class="hint">'+(isMe ? 'Tap "Want to try" on any dish to save it for a trip.' : 'Nothing saved yet.')+'</p>';
-  if (isMe && friends().length){
-    const board = [me].concat(friends()).map(id => ({id, s:statsFor(id)})).sort((a,b) => b.s.dishes - a.s.dishes || b.s.countries - a.s.countries);
-    h += '<div class="section-h"><h2>Leaderboard</h2><span>'+esc(selName())+' · must-trys eaten</span></div><div class="board">'
+  if (isMe && Object.keys(PEOPLE).length > 1){
+    const board = [me].concat(boardPeople()).map(id => ({id, s:statsFor(id)})).sort((a,b) => b.s.dishes - a.s.dishes || b.s.countries - a.s.countries);
+    h += '<div class="section-h"><h2>Leaderboard</h2>'+boardPicker()+'</div><div class="board">'
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
   if (isMe) h += settingsLink();
