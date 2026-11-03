@@ -443,6 +443,10 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
+.map-search input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}
+.mq-x{flex:none;width:26px;height:26px;margin-right:-6px;border-radius:50%;display:grid;place-items:center;background:var(--line);color:var(--muted)}
+.mq-x svg{width:13px;height:13px}
+#mq:placeholder-shown + .mq-x{display:none}
 .d-row.dpick{text-align:left;cursor:pointer;transition:background .15s}
 .d-row.dpick.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
 .uc-tip{margin-bottom:-4px}
@@ -1728,7 +1732,7 @@ function mapHTML(uid){
             return '<path class="c-'+st+'" d="'+s.d+'" data-cid="'+esc(s.id)+'"'+(listed.has(s.id) ? ' data-act="'+(uid === me ? 'country' : 'ucountry')+'" data-id="'+s.id+'"'+(uid === me ? '' : ' data-uid="'+esc(uid)+'"')+' data-v="'+(st === "v" || st === "c" ? 1 : 0)+'" data-done="'+(st === "c" ? 1 : 0)+'"' : '')+'><title>'+esc(s.name)+(st === "c" ? ' · completed' : st === "v" ? ' · eaten here' : listed.has(s.id) ? ' · on the list' : '')+'</title></path>'; }).join("")
         + '</g><g class="pins"></g></svg>';
     }
-    h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the list" autocomplete="off" aria-label="Find a country on the list" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
+    h += '<div class="mq-wrap"><label class="search map-search">'+I.search+'<input id="mq" type="search" placeholder="Find a country on the list" autocomplete="off" aria-label="Find a country on the list" aria-controls="mq-sugg" value="'+esc(cur().mq || "")+'"><button type="button" class="mq-x" data-act="mq-clear" aria-label="Clear search">'+I.close+'</button></label><div id="mq-sugg" class="sugg" role="listbox" hidden></div></div>'
       + '<div id="mq-result">'+(mapHl ? mapResultHTML(uid, mapHl) : '')+'</div>';
     h += '<div class="map-box">'+mapCache.html
       + '<div class="map-ctrl"><button data-act="mz" data-id="in" aria-label="Zoom in">+</button><button data-act="mz" data-id="out" aria-label="Zoom out">−</button><button class="mz-reset" data-act="mz" data-id="reset" aria-label="Show the whole map">⤢</button></div></div>'
@@ -2196,6 +2200,9 @@ document.addEventListener("click", e => {
     case "notif-off": disablePush(); break;
     case "notif-pref": setNotifyPref(id, !!t.checked); break;
     case "mq-pick": pickOnMap(id); break;
+    case "mq-clear": { e.preventDefault(); cur().mq = ""; const inp = $("#mq"); if (inp){ inp.value = ""; inp.blur(); }
+      const box = $("#mq-sugg"); if (box){ box.hidden = true; box.innerHTML = ""; }
+      if (mapCtl) mapCtl.button("reset"); else { mapHl = null; render(); } break; }
     case "cont": cur().cont = id; document.querySelectorAll(".fchip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id))); renderExploreResults(); break;
     case "post": { const m = findMeal(id); if (m) openSheet(postCard(m)); break; }
     case "like": { const m = findMeal(id); if (m && canWrite()) toggleLike(m); break; }
