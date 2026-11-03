@@ -442,6 +442,20 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
+.cc-list{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.cc-row{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-top:1px solid var(--line);text-align:left}
+.cc-row:first-child{border-top:0}
+.cc-row .flag{font-size:24px;line-height:1;flex:none}
+.cc-row .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.cc-row b{font-family:var(--f-display);font-weight:600;font-size:15px}
+.cc-row small{color:var(--muted);font-size:12.5px}
+.cc-row .meter{height:4px}
+.cc-thumbs{display:flex;flex:none}
+.cc-thumbs .photo{width:34px;height:34px;border-radius:8px;overflow:hidden;border:2px solid var(--surface);margin-left:-12px;display:block;flex:none}
+.cc-thumbs .photo:first-child{margin-left:0}
+.cc-thumbs .photo img{width:100%;height:100%;object-fit:cover}
+.cc-row .chev{font-size:20px;color:var(--muted);flex:none}
+.cc-more{align-self:center}
 .uc-hero{display:flex;align-items:center;gap:12px}
 .uc-hero .flag{font-size:34px;line-height:1}
 .uc-hero h2{font-size:20px;font-weight:800}
@@ -1870,13 +1884,16 @@ function viewUser(uid){
     if (pv === "all") h += '<div class="gal">'+ms.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>';
     else {
       const order = []; ms.forEach(m => { if (C[m.country] && !order.includes(m.country)) order.push(m.country); });   /* most recent first */
-      h += order.map(code => {
+      /* one compact row per country; the first few, then "Show all" */
+      const LIMIT = 4, all = cur().allc || order.length <= LIMIT + 1, list = all ? order : order.slice(0, LIMIT);
+      h += '<div class="cc-list">'+list.map(code => {
         const c = C[code], cms = ms.filter(m => m.country === code), n = c.dishes.filter(d => st.tried[d.id]).length, done = n === c.dishes.length;
-        return '<section class="cc"><button class="cc-h" data-act="'+(isMe ? 'country' : 'ucountry')+'" data-id="'+code+'"'+(isMe ? '' : ' data-uid="'+esc(uid)+'"')+'><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'
-          + (done ? '<span class="cc-done">Completed</span> · ' : n+' of '+c.dishes.length+' must-trys · ')+cms.length+' meal'+(cms.length === 1 ? '' : 's')+'</small></span><span class="chev" aria-hidden="true">›</span></button>'
-          + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span>'
-          + '<div class="strip">'+cms.map(m => '<button class="sthumb" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+(m.dish && D[m.dish] ? '' : '<span class="off-tag">Off list</span>')+'</button>').join("")+'</div></section>';
-      }).join("");
+        return '<button class="cc-row" data-act="ucountry" data-id="'+code+'" data-uid="'+esc(uid)+'"><span class="flag">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'
+          + (done ? '<span class="cc-done">Completed</span>' : n+' of '+c.dishes.length+' must-trys')+' · '+cms.length+' meal'+(cms.length === 1 ? '' : 's')+'</small>'
+          + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span></span>'
+          + '<span class="cc-thumbs" aria-hidden="true">'+cms.slice(0, 3).map(m => photoHTML(m, false)).join("")+'</span><span class="chev" aria-hidden="true">›</span></button>';
+      }).join("")+'</div>';
+      if (!all) h += '<button class="btn sm cc-more" data-act="allc">Show all '+order.length+' countries</button>';
     }
   }
   const want = savedOf(uid).filter(id => D[id] && !st.tried[id]);
@@ -1887,7 +1904,6 @@ function viewUser(uid){
     h += '<div class="section-h"><h2>Leaderboard</h2>'+boardPicker()+'</div><div class="board">'
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
-  if (isMe) h += settingsLink();
   return h + '</div>';
 }
 
@@ -1904,6 +1920,7 @@ function viewUserCountry(uid, code){
           + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+'</div>'; }).join("")
     + '</div>';
   h += '<div class="section-h"><h2>Photos</h2><span>'+ms.length+'</span></div>';
+  if (uid === me) h = h.replace('<div class="section-h"><h2>Must-try list</h2>', '<button class="btn" data-act="country" data-id="'+code+'" style="align-self:flex-start">Open the '+esc(c.name)+' page'+(GUIDES[code] ? ' and guide' : '')+'</button><div class="section-h"><h2>Must-try list</h2>');
   h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
     : '<p class="hint">No photos from '+esc(c.name)+' yet.</p>';
   return h + '</div>';
@@ -2079,9 +2096,10 @@ document.addEventListener("click", e => {
     case "country": closeSheet(); go({v:"country", id}); break;
     case "dish": closeSheet(); go({v:"dish", id}); break;
     case "user": closeSheet(); go({v:"user", id}); break;
-    case "ucountry": closeSheet(); if (t.dataset.uid && t.dataset.uid !== me && C[id]) go({v:"ucountry", id, uid:t.dataset.uid}); else go({v:"country", id}); break;
+    case "ucountry": closeSheet(); if (t.dataset.uid && C[id]) go({v:"ucountry", id, uid:t.dataset.uid}); else go({v:"country", id}); break;
     case "ctab": cur().tab = id; render(); break;
     case "pview": cur().pview = id; render(); break;
+    case "allc": cur().allc = true; render(); break;
     case "mz": if (mapCtl) mapCtl.button(id); break;
     case "sign-out": closeSheet(); sb.auth.signOut(); break;
     case "settings": closeSheet(); if (cur().v !== "settings") go({v:"settings"}); break;
