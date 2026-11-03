@@ -513,7 +513,10 @@ body.signed-out .tabs{display:none}
 .grp-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .grp h3{font-size:17px;font-weight:700}
 .grp .link{font-size:14px;font-weight:600;color:var(--accent)}
-.grp-foot{display:flex;justify-content:flex-end}
+.grp-foot{display:flex;justify-content:flex-end;gap:8px}
+.mem-acts{display:flex;gap:12px;flex:none;align-items:center}
+.link-role{font-size:13px;font-weight:600;color:var(--accent)}
+.hint.small{font-size:12.5px;text-align:right}
 .mem b{font-weight:600}
 .gpick{margin-bottom:-4px}
 .board-sel{font:inherit;font-size:13.5px;font-weight:600;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding:5px 30px 5px 12px;max-width:60%;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
@@ -1197,6 +1200,11 @@ async function removeMember(gid, email){
   if (error){ writeFailed(error); return; }
   toast(email === myEmail ? "You've left the group." : email + " removed."); await refresh();
 }
+async function setRole(gid, email, role){
+  const {error} = await sb.from("group_members").update({role}).eq("group_id", gid).eq("email", email);
+  if (error){ writeFailed(error); return; }
+  const g = groupById(gid); toast(role === "admin" ? email + " is now an admin of " + (g ? g.name : "the group") + "." : email + " is no longer an admin."); await refresh();
+}
 async function createGroup(name){
   name = (name || "").trim().slice(0, 40);
   if (!name){ toast("Give the group a name first."); return false; }
@@ -1272,9 +1280,10 @@ function groupsHTML(){
     return '<section class="guide grp"><div class="grp-h"><h3>'+esc(g.name)+'</h3>'+(admin ? '<button class="link" data-act="grp-rename" data-id="'+esc(g.id)+'">Rename</button>' : '')+'</div>'
      + '<div class="mem-list">'+g.members.map(x => { const uid = uidByEmail(x.email), nick = uid && PEOPLE[uid].nick;
          return '<div class="mem"><span>'+(nick ? '<b>'+esc(nick)+'</b> ' : '')+esc(x.email)+(x.role === "admin" ? ' <small>admin</small>' : '')+(uid ? '' : ' <small>invited</small>')+'</span>'
-           + (admin && x.email !== myEmail ? '<button class="link-del" data-act="mem-del" data-id="'+esc(g.id+"|"+x.email)+'">Remove</button>' : '')+'</div>'; }).join("")+'</div>'
+           + (admin && x.email !== myEmail ? '<span class="mem-acts"><button class="link-role" data-act="mem-role" data-id="'+esc(g.id+"|"+x.email+"|"+(x.role === "admin" ? "member" : "admin"))+'">'+(x.role === "admin" ? 'Remove admin' : 'Make admin')+'</button><button class="link-del" data-act="mem-del" data-id="'+esc(g.id+"|"+x.email)+'">Remove</button></span>' : '')+'</div>'; }).join("")+'</div>'
      + (admin ? '<div class="inline-form"><div class="field"><label class="label" for="mem-'+esc(g.id)+'">Add someone by email</label><input id="mem-'+esc(g.id)+'" type="email" placeholder="name@example.com" autocomplete="off"></div><button class="btn primary" data-act="mem-add" data-id="'+esc(g.id)+'">Add</button></div>' : '')
-     + '<div class="grp-foot">'+(admin ? '<button class="btn sm" data-act="grp-del" data-id="'+esc(g.id)+'">Delete group</button>' : '<button class="btn sm" data-act="grp-leave" data-id="'+esc(g.id)+'">Leave group</button>')+'</div></section>'; }).join("");
+     + '<div class="grp-foot">'+(!admin || g.members.some(x => x.role === "admin" && x.email !== myEmail) ? '<button class="btn sm" data-act="grp-leave" data-id="'+esc(g.id)+'">Leave group</button>' : '')+(admin ? '<button class="btn sm" data-act="grp-del" data-id="'+esc(g.id)+'">Delete group</button>' : '')+'</div>'
+     + (admin && !g.members.some(x => x.role === "admin" && x.email !== myEmail) && g.members.length > 1 ? '<p class="hint small">To leave this group, make someone else an admin first.</p>' : '')+'</section>'; }).join("");
   h += '<section class="guide grp"><h3>Start a new group</h3><p class="hint">For family, a trip crew or another set of friends. You\'ll be its admin and can add people by email. They create an account with that email, then see everyone they share a group with.</p>'
     + '<div class="inline-form"><div class="field"><label class="label" for="new-group">Group name</label><input id="new-group" type="text" maxlength="40" placeholder="e.g. Family" autocomplete="off"></div><button class="btn primary" data-act="grp-new">Create</button></div></section>';
   return h;
@@ -2054,6 +2063,10 @@ document.addEventListener("click", e => {
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
       sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
     case "gsel": setGroupSel(id); render(); break;
+    case "mem-role": { const [gid, email, role] = id.split("|"), g = groupById(gid) || {name:"the group"};
+      if (role === "member"){ setRole(gid, email, role); break; }
+      openSheet('<div class="stack"><h2 style="font-size:20px">Make '+esc(email)+' an admin of '+esc(g.name)+'?</h2><p class="hint">Admins can add and remove people, make other admins, rename the group and delete it.</p><div class="row-btns"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="mem-role-yes" data-id="'+esc(id)+'">Make admin</button></div></div>'); break; }
+    case "mem-role-yes": { closeSheet(); const [gid, email, role] = id.split("|"); setRole(gid, email, role); break; }
     case "mem-add": addMember(id, ($("#mem-" + id) || {}).value); break;
     case "mem-del": { const [gid, email] = id.split("|"), g = groupById(gid) || {name:"the group"};
       openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(email)+' from '+esc(g.name)+'?</h2><p class="hint">If they aren\'t in any of your other groups, their meals disappear from your feed. Nothing is deleted, so adding them back brings everything back.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break; }

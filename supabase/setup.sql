@@ -331,3 +331,19 @@ select '00000000-0000-4000-8000-000000000001'::uuid, lower(m.email), case when m
 from public.members m
 where exists (select 1 from public.groups g where g.id = '00000000-0000-4000-8000-000000000001'::uuid)
 on conflict do nothing;
+
+-- Admins can make other members admins (or back to members). An admin can leave once someone else is admin.
+create or replace function public.has_other_admin(gid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.group_members gm where gm.group_id = gid and gm.role = 'admin' and gm.email <> public.my_email());
+$$;
+revoke execute on function public.has_other_admin(uuid) from public, anon;
+grant execute on function public.has_other_admin(uuid) to authenticated;
+drop policy if exists "admins change roles" on public.group_members;
+create policy "admins change roles" on public.group_members for update
+  using (public.is_group_admin(group_id) and email <> public.my_email())
+  with check (public.is_group_admin(group_id) and email <> public.my_email());
+drop policy if exists "admins remove, members leave" on public.group_members;
+create policy "admins remove, members leave" on public.group_members for delete using (
+  (public.is_group_admin(group_id) and email <> public.my_email())
+  or (email = public.my_email() and (role = 'member' or public.has_other_admin(group_id))));
