@@ -1818,21 +1818,25 @@ function setupZoom(uid){
   let v = mapView && mapView.uid === uid ? Object.assign({}, mapView) : {uid, x:B[0], y:B[1], w:B[2], h:B[3]};
   const zoomed = () => v.w < B[2] * 0.999;
   const clampXY = () => { v.x = Math.min(B[0] + B[2] - v.w, Math.max(B[0], v.x)); v.y = Math.min(B[1] + B[3] - v.h, Math.max(B[1], v.y)); };
+  let wasZoomed = null, lastVB = "";
   const apply = () => {
     mapView = Object.assign({}, v);
-    svg.setAttribute("viewBox", [v.x, v.y, v.w, v.h].map(n => n.toFixed(2)).join(" "));
-    svg.style.touchAction = zoomed() ? "none" : "pan-y";
-    box.classList.toggle("zoomed", zoomed());
-    svg.querySelectorAll(".pin").forEach(c => c.setAttribute("r", (v.w * 0.0085).toFixed(2)));
+    const vb = [v.x, v.y, v.w, v.h].map(n => n.toFixed(2)).join(" ");
+    if (vb !== lastVB){ svg.setAttribute("viewBox", vb); lastVB = vb; }
+    const z = zoomed();
+    if (z !== wasZoomed){ wasZoomed = z; svg.style.touchAction = z ? "none" : "pan-y"; box.classList.toggle("zoomed", z); }
   };
-  const zoomAt = (f, cx, cy) => {
+  /* zoom by f around a screen point, without drawing (drawing happens once per frame) */
+  const zoomBy = (f, cx, cy) => {
     const r = svg.getBoundingClientRect(); if (!r.width) return;
     const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height, px = v.x + fx * v.w, py = v.y + fy * v.h;
     v.w = Math.min(B[2], Math.max(minW, v.w / f)); v.h = v.w * ratio;
-    v.x = px - fx * v.w; v.y = py - fy * v.h; clampXY(); apply();
+    v.x = px - fx * v.w; v.y = py - fy * v.h; clampXY();
   };
+  const zoomAt = (f, cx, cy) => { zoomBy(f, cx, cy); apply(); };
   const centre = () => { const r = svg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
   mapCtl = {button: id => {
+    stopGlide();
     if (id === "in") zoomAt(1.6, ...centre());
     else if (id === "out") zoomAt(1 / 1.6, ...centre());
     else { v = {uid, x:B[0], y:B[1], w:B[2], h:B[3]}; apply(); highlight(null); }
@@ -1849,29 +1853,69 @@ function setupZoom(uid){
     const out = $("#mq-result"); if (out) out.innerHTML = id ? mapResultHTML(uid, id) : '';
   };
   apply(); if (mapHl) highlight(mapHl);
-  const pts = new Map(); let moved = 0;
-  svg.addEventListener("pointerdown", e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); if (pts.size === 1) moved = 0; });
+  /* Touch and mouse: positions are collected as they arrive and the map is redrawn at most once per screen frame,
+     so fast fingers don't queue up work. Pinch zooms around the point between the fingers and moving both fingers pans;
+     a one-finger drag pans once zoomed in and keeps gliding a little when you let go. */
+  const pts = new Map(); let moved = 0, raf = 0, last = null, vel = {x:0, y:0}, lastT = 0, glideRaf = 0, wheelF = 1, wheelAt = null;
+  const snap = () => { const a = Array.from(pts.values()); if (!a.length) return null;
+    return {n:a.length, mx:a.reduce((t, p) => t + p.x, 0) / a.length, my:a.reduce((t, p) => t + p.y, 0) / a.length, d:a.length > 1 ? Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) : 0}; };
+  const stopGlide = () => { if (glideRaf) cancelAnimationFrame(glideRaf); glideRaf = 0; };
+  const frame = () => {
+    raf = 0;
+    if (wheelAt){ zoomBy(wheelF, wheelAt.x, wheelAt.y); wheelF = 1; wheelAt = null; }
+    const now = snap(), r = svg.getBoundingClientRect();
+    if (now && last && now.n === last.n && r.width){
+      const kx = v.w / r.width, ky = v.h / r.height, dx = now.mx - last.mx, dy = now.my - last.my;
+      if (now.n >= 2){
+        v.x -= dx * kx; v.y -= dy * ky; clampXY();
+        if (last.d > 0 && now.d > 0) zoomBy(Math.pow(now.d / last.d, PINCH_GAIN), now.mx, now.my);
+        vel = {x:0, y:0};
+      } else if (zoomed()){
+        v.x -= dx * kx; v.y -= dy * ky; clampXY();
+        const t = performance.now(), dt = Math.max(1, t - lastT); lastT = t;
+        vel = {x:0.7 * vel.x + 0.3 * (-dx * kx / dt), y:0.7 * vel.y + 0.3 * (-dy * ky / dt)};
+      }
+    }
+    last = now; apply();
+  };
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(frame); };
+  const glide = () => {
+    let t0 = performance.now();
+    const step = t => {
+      const dt = Math.min(40, t - t0); t0 = t;
+      const ox = v.x, oy = v.y; v.x += vel.x * dt; v.y += vel.y * dt; clampXY(); apply();
+      const f = Math.exp(-dt / 220); vel.x *= f; vel.y *= f;
+      if (v.x === ox) vel.x = 0; if (v.y === oy) vel.y = 0;
+      glideRaf = Math.hypot(vel.x, vel.y) * 16 > v.w * 0.0008 ? requestAnimationFrame(step) : 0;
+    };
+    glideRaf = requestAnimationFrame(step);
+  };
+  svg.addEventListener("pointerdown", e => {
+    stopGlide(); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pts.size === 1){ moved = 0; vel = {x:0, y:0}; lastT = performance.now(); }
+    last = snap();
+  });
   svg.addEventListener("pointermove", e => {
     const prev = pts.get(e.pointerId); if (!prev) return;
-    const now = {x:e.clientX, y:e.clientY};
-    if (pts.size >= 2){
-      const other = Array.from(pts.entries()).find(([id]) => id !== e.pointerId)[1];
-      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(now.x - other.x, now.y - other.y);
-      if (d0 > 0) zoomAt(Math.pow(d1 / d0, PINCH_GAIN), (now.x + other.x) / 2, (now.y + other.y) / 2);
-      moved += 20;
-    } else if (zoomed()){
-      const r = svg.getBoundingClientRect();
-      v.x -= (now.x - prev.x) * v.w / r.width; v.y -= (now.y - prev.y) * v.h / r.height; clampXY(); apply();
-      moved += Math.abs(now.x - prev.x) + Math.abs(now.y - prev.y);
-      if (moved > 6) { try { svg.setPointerCapture(e.pointerId); } catch(err) {} }
+    if (pts.size >= 2 || zoomed()){
+      moved += Math.abs(e.clientX - prev.x) + Math.abs(e.clientY - prev.y) + (pts.size >= 2 ? 20 : 0);
+      if (moved > 6){ try { svg.setPointerCapture(e.pointerId); } catch(err) {} }
     }
-    pts.set(e.pointerId, now);
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); schedule();
   });
-  ["pointerup","pointercancel","lostpointercapture"].forEach(t => svg.addEventListener(t, e => pts.delete(e.pointerId)));
+  const lift = e => {
+    if (!pts.has(e.pointerId)) return;
+    if (raf){ cancelAnimationFrame(raf); frame(); }
+    const wasOne = pts.size === 1; pts.delete(e.pointerId); last = snap();
+    if (!pts.size && wasOne && zoomed() && performance.now() - lastT < 80 && Math.hypot(vel.x, vel.y) * 16 > v.w * 0.002) glide();
+  };
+  svg.addEventListener("pointerup", lift); svg.addEventListener("pointercancel", lift);
+  /* the map taking hold of a finger from the country under it fires "lost capture" on that country: not a lift */
+  svg.addEventListener("lostpointercapture", e => { if (e.target === svg) lift(e); });
   /* a drag or pinch shouldn't count as tapping a country */
   svg.addEventListener("click", e => { if (moved > 6){ e.stopPropagation(); e.preventDefault(); moved = 0; } }, true);
   /* trackpad pinch (arrives as ctrl + wheel), or any wheel once zoomed in */
-  svg.addEventListener("wheel", e => { if (!e.ctrlKey && !zoomed()) return; e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.004), e.clientX, e.clientY); }, {passive:false});
+  svg.addEventListener("wheel", e => { if (!e.ctrlKey && !zoomed()) return; e.preventDefault(); stopGlide(); wheelF *= Math.exp(-e.deltaY * 0.004); wheelAt = {x:e.clientX, y:e.clientY}; schedule(); }, {passive:false});
 }
 function badgesFor(st){ return [["First stamp", st.dishes >= 1],["Five-plate club", st.dishes >= 5],["Three passports", st.countries >= 3],["Country complete", COUNTRIES.some(c => c.dishes.every(d => st.tried[d.id]))]]; }
 function viewUser(uid){
