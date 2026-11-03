@@ -221,7 +221,7 @@ update public.profiles p set email = lower(u.email) from auth.users u where u.id
 
 -- helpers used by the privacy rules
 create or replace function public.my_email() returns text
-language sql stable as $$ select lower(auth.jwt() ->> 'email'); $$;
+language sql stable set search_path = public, auth as $$ select lower(auth.jwt() ->> 'email'); $$;
 
 create or replace function public.is_member() returns boolean
 language sql stable security definer set search_path = public as $$
