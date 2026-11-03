@@ -442,6 +442,12 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
+.d-row.pick{text-align:left;cursor:pointer;transition:background .15s}
+.d-row.pick.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.uc-tip{margin-bottom:-4px}
+.gal .tile{transition:opacity .2s}
+.gal .tile.dim{opacity:.3}
+.gal .tile.hl::after{content:"";position:absolute;inset:0;border:3px solid var(--accent);box-shadow:inset 0 0 0 2px rgba(255,255,255,.85);pointer-events:none}
 .cc-list{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
 .cc-row{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-top:1px solid var(--line);text-align:left}
 .cc-row:first-child{border-top:0}
@@ -1911,20 +1917,31 @@ function viewUser(uid){
 /* A friend's progress in one country: view only, nothing to log from here. */
 function viewUserCountry(uid, code){
   const c = C[code], t = triedMap(uid), n = c.dishes.filter(d => t[d.id]).length, done = n === c.dishes.length;
-  const ms = mealsOf(uid).filter(m => m.country === code);
+  const ms = mealsOf(uid).filter(m => m.country === code), hl = cur().hl || null;
+  const canPick = d => t[d.id] && ms.some(m => m.dish === d.id);
   let h = '<div class="stack"><div class="hero"><div class="uc-hero">'+avatar(uid, "lg")+'<div><h2>'+c.flag+' '+esc(c.name)+'</h2><p>'+esc(nameOf(uid))+(done ? ' has completed '+esc(c.name)+'.' : ' has had <span class="mono">'+n+' of '+c.dishes.length+'</span> must-trys.')+'</p></div></div>'
     + '<span class="meter'+(done ? ' done' : '')+'"><i style="width:'+Math.round(n / c.dishes.length * 100)+'%"></i></span></div>';
   h += '<div class="section-h"><h2>Must-try list</h2><span>'+n+'/'+c.dishes.length+'</span></div><div class="d-list">'
     + c.dishes.map(d => { const when = t[d.id], dm = ms.filter(m => m.dish === d.id), best = dm.reduce((a, m) => Math.max(a, +m.rating || 0), 0);
-        return '<div class="d-row static"><span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'
+        const open = canPick(d) ? '<button class="d-row static pick'+(hl === d.id ? ' sel' : '')+'" data-act="uc-hl" data-id="'+d.id+'" aria-pressed="'+(hl === d.id)+'">' : '<div class="d-row static">';
+        return open+'<span class="em">'+d.emoji+'</span><span class="t"><b>'+esc(d.name)+'</b><small>'
           + (when ? (isDrink(d.id) ? 'Drunk ' : 'Eaten ')+fmtDate(when)+(best ? ' · '+best.toFixed(1)+' ★' : '')+(dm.length > 1 ? ' · '+dm.length+' times' : '') : 'Not yet')+'</small></span>'
-          + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+'</div>'; }).join("")
+          + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+(canPick(d) ? '</button>' : '</div>'); }).join("")
     + '</div>';
+  if (c.dishes.some(canPick)) h = h.replace('<div class="d-list">', '<p class="hint uc-tip">Tap a dish '+(uid === me ? 'you\'ve' : 'they\'ve')+' had to find its photo below.</p><div class="d-list">');
   h += '<div class="section-h"><h2>Photos</h2><span>'+ms.length+'</span></div>';
   if (uid === me) h = h.replace('<div class="section-h"><h2>Must-try list</h2>', '<button class="btn" data-act="country" data-id="'+code+'" style="align-self:flex-start">Open the '+esc(c.name)+' page'+(GUIDES[code] ? ' and guide' : '')+'</button><div class="section-h"><h2>Must-try list</h2>');
-  h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile" data-act="post" data-id="'+esc(m.id)+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
+  h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile'+(hl ? (m.dish === hl ? ' hl' : ' dim') : '')+'" data-act="post" data-id="'+esc(m.id)+'" data-dish="'+esc(m.dish || '')+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
     : '<p class="hint">No photos from '+esc(c.name)+' yet.</p>';
   return h + '</div>';
+}
+
+/* tapping a dish on someone's country page rings its photos */
+function applyUcHl(scroll){
+  const hl = cur().hl || null; let first = null;
+  document.querySelectorAll(".d-row.pick").forEach(b => { const on = b.dataset.id === hl; b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on); });
+  document.querySelectorAll(".gal .tile[data-dish]").forEach(t => { const on = !!hl && t.dataset.dish === hl; t.classList.toggle("hl", on); t.classList.toggle("dim", !!hl && !on); if (on && !first) first = t; });
+  if (scroll && first){ const r = first.getBoundingClientRect(); if (r.top < 70 || r.bottom > innerHeight - 90) first.scrollIntoView({behavior:"smooth", block:"center"}); }
 }
 
 /* ---------- Sheets ---------- */
@@ -2100,6 +2117,7 @@ document.addEventListener("click", e => {
     case "ucountry": closeSheet(); if (t.dataset.uid && C[id]) go({v:"ucountry", id, uid:t.dataset.uid}); else go({v:"country", id}); break;
     case "ctab": cur().tab = id; render(); break;
     case "pview": cur().pview = id; render(); break;
+    case "uc-hl": { const r = cur(); r.hl = r.hl === id ? null : id; applyUcHl(true); break; }
     case "allc": { const sy = window.scrollY, rows = document.querySelector(".cc-list"), top = rows ? rows.getBoundingClientRect().top + sy : sy;
       cur().allc = !!id; render(); if (!id && sy > top) window.scrollTo(0, Math.max(0, top - 120)); break; }
     case "mz": if (mapCtl) mapCtl.button(id); break;
