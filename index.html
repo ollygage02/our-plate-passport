@@ -505,6 +505,15 @@ img{max-width:100%}
 body.signed-out .tabs{display:none}
 html.app *{touch-action:manipulation}
 html.app,html.app body{touch-action:pan-x pan-y;overscroll-behavior-y:none}
+/* form fields: same height and width everywhere, nothing wider than the screen (iPhone date boxes especially) */
+.sheet{overflow-x:hidden;overscroll-behavior:contain}
+.p-grid>.field,.sheet .field{min-width:0}
+.field select,.field input[type=text],.field input[type=date],.field input[type=number],.field input[type=email],.field input[type=password]{font:inherit;color:var(--fg);background-color:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:0 12px;width:100%;max-width:100%;min-width:0;height:46px;box-sizing:border-box;margin:0}
+.field textarea{box-sizing:border-box;max-width:100%}
+.field input[type=date]{-webkit-appearance:none;appearance:none;display:block;text-align:left;line-height:43px}
+.field input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+.field input[type=date]::-webkit-calendar-picker-indicator{opacity:.55}
+.field select{-webkit-appearance:none;appearance:none;padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;text-overflow:ellipsis}
 /* iPhone zooms the page when you tap a text box smaller than 16px, so phones get 16px fields */
 @media (pointer:coarse){input,select,textarea{font-size:16px!important}}
 html.app button,html.app a,html.app label{touch-action:manipulation}
