@@ -151,3 +151,37 @@ grant execute on function public.is_member_uid(uuid) to authenticated;
 -- You, as the group's first member and admin. Change this to the email you'll sign in with.
 insert into public.members (email, is_admin) values (lower('YOUR-EMAIL@example.com'), true)
 on conflict (email) do update set is_admin = true;
+
+-- ---------- Notifications ----------
+-- Which kinds of notification each person wants.
+alter table public.profiles add column if not exists notify jsonb not null default '{"meals":true,"likes":true,"done":true}'::jsonb;
+
+-- One row per phone/browser that has turned notifications on.
+create table if not exists public.push_subscriptions (
+  endpoint    text primary key,
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  p256dh      text not null,
+  auth        text not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists push_subs_user_idx on public.push_subscriptions (user_id);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "see own devices"    on public.push_subscriptions;
+drop policy if exists "add own device"     on public.push_subscriptions;
+drop policy if exists "update own device"  on public.push_subscriptions;
+drop policy if exists "remove own device"  on public.push_subscriptions;
+create policy "see own devices"   on public.push_subscriptions for select using (user_id = auth.uid());
+create policy "add own device"    on public.push_subscriptions for insert with check (user_id = auth.uid() and public.is_member());
+create policy "update own device" on public.push_subscriptions for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "remove own device" on public.push_subscriptions for delete using (user_id = auth.uid());
+
+-- Private sending keys: no policies, so only the server-side sender (supabase/functions/notify) can read this.
+-- Fill it with a freshly generated VAPID key pair; put the public half in config.js as vapidPublicKey.
+create table if not exists public.push_config (
+  id            int primary key default 1 check (id = 1),
+  vapid_public  text not null,
+  vapid_private text not null,
+  subject       text not null
+);
+alter table public.push_config enable row level security;
+revoke all on public.push_config from anon, authenticated;

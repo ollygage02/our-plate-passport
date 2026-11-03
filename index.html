@@ -503,6 +503,12 @@ body.signed-out .tabs{display:none}
 .mem:first-child{border-top:0}
 .mem span{min-width:0;overflow-wrap:anywhere}
 .mem small{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;margin-left:4px}
+.notif{gap:10px}
+.notif-list{display:flex;flex-direction:column}
+.notif-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.notif-row:first-child{border-top:0}
+.notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.notif .btn.sm{align-self:flex-start}
 </style>
 </head>
 <body>
@@ -1033,6 +1039,7 @@ async function startSession(session){
   await sb.from("profiles").upsert({id:me}, {onConflict:"id", ignoreDuplicates:true});
   mode = "shared";
   await refresh();
+  openMealFromLink(); initPush();
   liveChannel = sb.channel("group-live")
     .on("postgres_changes", {event:"*", schema:"public", table:"meals"}, scheduleRefresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"likes"}, scheduleRefresh)
@@ -1057,7 +1064,7 @@ async function refresh(){
     ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
     photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), likes:likes[r.id] || {}, created:r.created_at}));
   PEOPLE = {};
-  p.data.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path}; });
+  p.data.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path}; });
   if (!mem.error) MEMBERS = mem.data;
   render();
 }
@@ -1099,14 +1106,14 @@ async function addMeal(m, blobs){
     const {error} = await sb.from("meals").insert({id, user_id:me, dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption,
       ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, photo_path, thumb_path});
     if (error){ removeFiles([thumb_path, photo_path]); throw error; }
-    await refresh(); return true;
+    m.id = id; await refresh(); return true;
   } catch(e){ writeFailed(e); return false; }
 }
 async function toggleLike(m){
   const on = !(m.likes && m.likes[me]);
   m.likes = Object.assign({}, m.likes, {[me]:on}); render();
   const q = on ? sb.from("likes").insert({meal_id:m.id, user_id:me}) : sb.from("likes").delete().eq("meal_id", m.id).eq("user_id", me);
-  const {error} = await q; if (error) writeFailed(error);
+  const {error} = await q; if (error) writeFailed(error); else if (on) announceLike(m);
   scheduleRefresh();
 }
 async function deleteMeal(m){
@@ -1202,6 +1209,96 @@ function membersHTML(){
        + (x.email.toLowerCase() === myEmail ? '' : '<button class="link-del" data-act="mem-del" data-id="'+esc(x.email)+'">Remove</button>')+'</div>').join("")+'</div>'
    + '<div class="inline-form"><div class="field"><label class="label" for="mem-email">Add an email</label><input id="mem-email" type="email" placeholder="friend@example.com" autocomplete="off"></div><button class="btn primary" data-act="mem-add">Add</button></div></section>';
 }
+
+
+/* ---------- Notifications (web push) ---------- */
+const pushOK = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!(window.OPP_CONFIG && OPP_CONFIG.vapidPublicKey);
+const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let swReg = null, pushSub = null, pushBusy = false;
+function b64u(s){ const p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, ch => ch.charCodeAt(0)); }
+async function initPush(){
+  if (!pushOK()) return;
+  try {
+    swReg = await navigator.serviceWorker.register("/sw.js");
+    pushSub = await swReg.pushManager.getSubscription();
+    if (pushSub && Notification.permission === "granted") await savePushSub(pushSub);
+  } catch(e) { console.warn("notifications unavailable", e); }
+  if (cur().v === "user" && cur().id === me) render();
+}
+async function savePushSub(sub){
+  const j = sub.toJSON();
+  const {error} = await sb.from("push_subscriptions").upsert({endpoint:j.endpoint, user_id:me, p256dh:j.keys.p256dh, auth:j.keys.auth}, {onConflict:"endpoint"});
+  if (error) throw error;
+}
+async function enablePush(){
+  if (pushBusy || !swReg) return; pushBusy = true; render();
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted"){ toast(perm === "denied" ? "Notifications are blocked. You can allow them in your phone's settings." : "Notifications weren't turned on."); return; }
+    pushSub = await swReg.pushManager.getSubscription() || await swReg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64u(OPP_CONFIG.vapidPublicKey)});
+    await savePushSub(pushSub);
+    toast("Notifications are on for this device.");
+  } catch(e) { console.error(e); toast("Couldn't turn on notifications. Try again."); pushSub = null; }
+  finally { pushBusy = false; render(); }
+}
+async function disablePush(){
+  if (pushBusy || !pushSub) return; pushBusy = true; render();
+  try { await sb.from("push_subscriptions").delete().eq("endpoint", pushSub.endpoint); await pushSub.unsubscribe(); pushSub = null; toast("Notifications are off for this device."); }
+  catch(e) { console.error(e); toast("Couldn't turn notifications off. Try again."); }
+  finally { pushBusy = false; render(); }
+}
+const NOTIFY_KINDS = [["meals","Friends' new meals"],["done","A friend completes a country"],["likes","Someone likes your meal"]];
+const notifyPrefs = () => Object.assign({meals:true, done:true, likes:true}, (PEOPLE[me] && PEOPLE[me].notify) || {});
+async function setNotifyPref(key, on){
+  const n = Object.assign(notifyPrefs(), {[key]:on});
+  if (PEOPLE[me]) PEOPLE[me].notify = n;
+  const {error} = await sb.from("profiles").update({notify:n}).eq("id", me);
+  if (error) writeFailed(error);
+}
+function notifHTML(){
+  let h = '<div class="section-h"><h2>Notifications</h2></div><section class="guide notif">';
+  if (!pushOK()){
+    h += isIOS() && !isStandalone()
+      ? '<p class="hint">To get notifications on iPhone, add this site to your Home Screen first: tap Share, then <b>Add to Home Screen</b>, and open it from the new icon.</p>'
+      : '<p class="hint">This browser can\'t show notifications. Try Chrome or Safari, or add the site to your Home Screen.</p>';
+    return h + '</section>';
+  }
+  if (Notification.permission === "denied") return h + '<p class="hint">Notifications are blocked for this site. You can allow them in your phone\'s settings, then come back here.</p></section>';
+  if (!pushSub){
+    return h + '<p class="hint">Get a notification when friends post a meal, finish a country or like your photos. You choose which.</p>'
+      + '<button class="btn primary" data-act="notif-on"'+(pushBusy || !swReg ? ' disabled' : '')+'>'+(pushBusy ? 'Turning on…' : 'Turn on notifications')+'</button></section>';
+  }
+  const p = notifyPrefs();
+  h += '<div class="notif-list">'+NOTIFY_KINDS.map(([k, label]) => '<label class="notif-row"><span>'+esc(label)+'</span><input type="checkbox" data-act="notif-pref" data-id="'+k+'"'+(p[k] ? ' checked' : '')+'></label>').join("")+'</div>';
+  return h + '<button class="btn sm" data-act="notif-off"'+(pushBusy ? ' disabled' : '')+'>Turn off on this device</button></section>';
+}
+/* tell the group (the server checks you really did it, and who wants to hear) */
+function notifyGroup(body){ try { sb.functions.invoke("notify", {body}).catch(() => {}); } catch(e) {} }
+function announceMeal(m, wasNew){
+  if (!m || !m.id) return;
+  const c = C[m.country] || {name:"", flag:""}, who = nameOf(me).split(" ")[0] || "A friend";
+  const verb = m.dish && isDrink(m.dish) ? "drank" : "had";
+  const title = m.dish && D[m.dish] ? who+" "+verb+" "+D[m.dish].name+" "+c.flag : who+" logged a meal in "+c.name+" "+c.flag;
+  const body = (m.dish && D[m.dish] ? (m.place ? "At "+m.place+", "+c.name : "In "+c.name) : (m.custom || "A meal")+(m.place ? " at "+m.place : ""))+(m.caption ? ' · "'+m.caption.slice(0, 80)+'"' : "");
+  const t = triedMap(me), done = m.dish && wasNew && c.dishes && c.dishes.every(d => t[d.id]);
+  if (done) notifyGroup({type:"done", meal_id:m.id, title:who+" completed "+c.name+"! "+c.flag, body:"All "+c.dishes.length+" must-trys, finishing with "+D[m.dish].name+".", alt:{title, body}});
+  else notifyGroup({type:"meal", meal_id:m.id, title, body});
+}
+function announceLike(m){
+  if (!m || m.uid === me) return;
+  const c = C[m.country] || {flag:""}, who = nameOf(me).split(" ")[0] || "A friend";
+  notifyGroup({type:"like", meal_id:m.id, title:who+" liked your "+dishName(m)+" "+c.flag, body:m.caption ? '"'+m.caption.slice(0, 90)+'"' : "Open Plate Passport to see it."});
+}
+/* opening the app from a notification shows that meal */
+function openMealFromLink(url){
+  try {
+    const id = new URL(url || location.href, location.origin).searchParams.get("meal"); if (!id) return;
+    const m = findMeal(id); if (m) openSheet(postCard(m));
+    if (!url) history.replaceState(null, "", location.pathname);
+  } catch(e) {}
+}
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.type === "open") openMealFromLink(e.data.url); });
 
 /* ---------- Photos ---------- */
 function loadImgRaw(blob){ return new Promise((res, rej) => { const url = URL.createObjectURL(blob), img = new Image(); img.onload = () => res({img, url}); img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("unreadable")); }; img.src = url; }); }
@@ -1657,7 +1754,7 @@ function viewUser(uid){
     h += '<div class="section-h"><h2>Group leaderboard</h2><span>Must-trys eaten</span></div><div class="board">'
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
-  if (isMe) h += membersHTML() + '<p style="text-align:center;margin-top:8px"><button class="btn" data-act="sign-out">Sign out</button></p>';
+  if (isMe) h += notifHTML() + membersHTML() + '<p style="text-align:center;margin-top:8px"><button class="btn" data-act="sign-out">Sign out</button></p>';
   return h + '</div>';
 }
 
@@ -1830,6 +1927,7 @@ async function postMeal(){
   const wasNew = m.dish && !triedMap(me)[m.dish];
   const ok = await addMeal(m, {thumb:K.thumbBlob, full:K.full});
   if (!ok){ K.posting = false; renderComposer(); return; }
+  announceMeal(m, wasNew);
   closeSheet(); K = null;
   if (m.dish) go({v:"dish", id:m.dish}); else go({v:"user", id:me}, true);
   toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
@@ -1860,6 +1958,9 @@ document.addEventListener("click", e => {
     case "mem-add": addMember($("#mem-email").value); break;
     case "mem-del": openSheet('<div class="stack"><h2 style="font-size:20px">Remove '+esc(id)+'?</h2><p class="hint">They won\'t be able to see the group, and they\'ll disappear from the feed and leaderboard. Their meals aren\'t deleted, so adding them back brings everything back.</p><div class="row-btns"><button class="btn" data-act="close">Keep them</button><button class="btn primary" data-act="mem-del-yes" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Remove</button></div></div>'); break;
     case "mem-del-yes": closeSheet(); removeMember(id); break;
+    case "notif-on": enablePush(); break;
+    case "notif-off": disablePush(); break;
+    case "notif-pref": setNotifyPref(id, !!t.checked); break;
     case "mq-pick": pickOnMap(id); break;
     case "cont": cur().cont = id; document.querySelectorAll(".fchip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id))); renderExploreResults(); break;
     case "post": { const m = findMeal(id); if (m) openSheet(postCard(m)); break; }
