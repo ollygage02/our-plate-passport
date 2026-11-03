@@ -498,6 +498,17 @@ body.signed-out .tabs{display:none}
 .field input[type=email],.field input[type=password]{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;width:100%}
 .auth-msg{font-size:14px;color:var(--stamp);font-weight:600}
 .auth-switch{font-size:14px;color:var(--muted)}
+.set-btn svg{width:22px;height:22px}
+.set-link{display:flex;align-items:center;gap:12px;width:100%;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:14px 16px;text-align:left;margin-top:6px}
+.set-link svg{width:22px;height:22px;flex:none;color:var(--muted)}
+.set-link .t{flex:1;min-width:0}
+.set-link .t b{display:block;font-size:15px}
+.set-link .t small{display:block;color:var(--muted);font-size:13px}
+.set-link .chev{color:var(--muted);font-size:20px}
+.set-row{display:flex;align-items:center;gap:12px}
+.set-row .t{min-width:0}
+.set-row .t b{display:block}
+.set-row .t small{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -542,6 +553,7 @@ const toISO = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"
 const todayISO = () => toISO(new Date());
 
 const I = {
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
   back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
   save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg>',
@@ -1211,6 +1223,22 @@ function membersHTML(){
 }
 
 
+/* ---------- Settings ---------- */
+function viewSettings(){
+  let h = '<div class="stack">';
+  if (typeof notifHTML === "function") h += notifHTML();
+  h += membersHTML();
+  h += '<div class="section-h"><h2>Your account</h2></div><section class="guide set-acc">'
+    + '<div class="set-row">'+avatar(me)+'<span class="t"><b>'+esc(nameOf(me))+'</b><small>'+esc(myEmail)+'</small></span></div>'
+    + '<p class="hint">Change your name and profile photo at the top of your Passport.</p>'
+    + '<div class="row-btns"><button class="btn sm" data-act="set-pass">Change password</button><button class="btn sm" data-act="sign-out">Sign out</button></div></section>';
+  return h + '</div>';
+}
+function settingsLink(){
+  return '<button class="set-link" data-act="settings">'+I.gear+'<span class="t"><b>Settings</b><small>'+(isOwner ? 'Notifications, group members, password, sign out' : 'Notifications, password, sign out')+'</small></span><span class="chev" aria-hidden="true">›</span></button>';
+}
+
+
 /* ---------- Notifications (web push) ---------- */
 const pushOK = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!(window.OPP_CONFIG && OPP_CONFIG.vapidPublicKey);
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
@@ -1224,7 +1252,7 @@ async function initPush(){
     pushSub = await swReg.pushManager.getSubscription();
     if (pushSub && Notification.permission === "granted") await savePushSub(pushSub);
   } catch(e) { console.warn("notifications unavailable", e); }
-  if (cur().v === "user" && cur().id === me) render();
+  if (cur().v === "settings" || (cur().v === "user" && cur().id === me)) render();
 }
 async function savePushSub(sub){
   const j = sub.toJSON();
@@ -1395,11 +1423,12 @@ function render(){
   else if (r.v === "country"){ title = C[r.id].name; html = viewCountry(r.id); }
   else if (r.v === "dish"){ title = D[r.id].name; html = viewDish(r.id); }
   else if (r.v === "user"){ title = r.id === me ? "Your passport" : nameOf(r.id); html = viewUser(r.id); }
+  else if (r.v === "settings"){ title = "Settings"; html = viewSettings(); }
   else if (r.v === "ucountry"){ title = shortName(r.uid) + " · " + C[r.id].name; html = viewUserCountry(r.uid, r.id); }
   const bar = $("#bar");
   if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>';
   else if (r.v === "feed") bar.innerHTML = '<span class="wordmark"><span class="dot"></span>Our Plate Passport</span>';
-  else bar.innerHTML = '<h1 style="font-size:24px;font-weight:800">'+esc(title)+'</h1>';
+  else bar.innerHTML = '<h1 style="font-size:24px;font-weight:800;flex:1">'+esc(title)+'</h1>' + (r.v === "user" && r.id === me ? '<button class="icon-btn set-btn" data-act="settings" aria-label="Settings">'+I.gear+'</button>' : '');
   const ae = document.activeElement, keep = ae && (ae.id === "q" || ae.id === "mq") ? {id:ae.id, pos:ae.selectionStart} : null;
   $("#view").innerHTML = html;
   if (keep){ const el = $("#" + keep.id); if (el){ el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch(e) {} if (keep.id === "mq") renderMapSugg(el.value); } }
@@ -1417,7 +1446,7 @@ function viewFeed(){
     h += '<div class="empty-state"><p><b style="color:var(--fg)">No meals yet.</b></p><p>Log the first one, and it shows up here for everyone you share this passport with.</p><button class="btn primary" data-act="log" data-id="">'+I.camera+'Log a meal</button></div>';
   }
   if (mode === "shared" && friends().length === 0 && isOwner){
-    h += '<section class="guide"><h3 style="font-size:17px;font-weight:600">Add your friends</h3><p class="hint">Add their email addresses under Group members on your Passport, then send them this site\'s address. They create an account with that email.</p><button class="btn" data-act="tab" data-id="passport" style="align-self:flex-start">Go to Group members</button></section>';
+    h += '<section class="guide"><h3 style="font-size:17px;font-weight:600">Add your friends</h3><p class="hint">Add their email addresses under Settings, Group members, then send them this site\'s address. They create an account with that email.</p><button class="btn" data-act="settings" style="align-self:flex-start">Go to Group members</button></section>';
   }
   if (friends().length){
     h += '<div class="section-h"><h2>Your group</h2><span>'+(friends().length + 1)+' people</span></div><div class="people">'
@@ -1754,7 +1783,7 @@ function viewUser(uid){
     h += '<div class="section-h"><h2>Group leaderboard</h2><span>Must-trys eaten</span></div><div class="board">'
       + board.map((r,i) => '<button class="b-row'+(r.id === me ? ' me' : '')+'" data-act="user" data-id="'+esc(r.id)+'"><span class="rk">'+(i+1)+'</span>'+avatar(r.id)+'<span class="nm">'+esc(r.id === me ? 'You' : nameOf(r.id))+'</span><span class="sc">'+r.s.dishes+' dish'+(r.s.dishes === 1 ? '' : 'es')+' · '+r.s.countries+' ctry</span></button>').join("")+'</div>';
   }
-  if (isMe) h += notifHTML() + membersHTML() + '<p style="text-align:center;margin-top:8px"><button class="btn" data-act="sign-out">Sign out</button></p>';
+  if (isMe) h += settingsLink();
   return h + '</div>';
 }
 
@@ -1951,6 +1980,8 @@ document.addEventListener("click", e => {
     case "pview": cur().pview = id; render(); break;
     case "mz": if (mapCtl) mapCtl.button(id); break;
     case "sign-out": closeSheet(); sb.auth.signOut(); break;
+    case "settings": closeSheet(); if (cur().v !== "settings") go({v:"settings"}); break;
+    case "set-pass": askNewPassword(); break;
     case "auth-view": authView = id; authMsg = ""; render(); break;
     case "save-nick1": { const v = ($("#nick1").value || "").trim().slice(0, 30); if (!v){ toast("Add a name first."); break; } closeSheet(); setPerson({nick:v}); toast("Welcome, " + v + "!"); break; }
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
