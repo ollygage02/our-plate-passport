@@ -476,6 +476,31 @@ label.link{color:var(--accent);font-weight:600;cursor:pointer}
 .crop-ctrl{display:flex;align-items:center;gap:10px}
 .crop-ctrl input{flex:1;accent-color:var(--accent)}
 .map-search{height:42px}
+/* stamps */
+.stamp{--ink:var(--stamp);display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;color:var(--ink)}
+.stamp.travel{--ink:var(--accent)}.stamp.habit{--ink:#8A4FD8}.stamp.social{--ink:var(--ok)}
+.st-ring{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;border:2.5px solid var(--ink);box-shadow:inset 0 0 0 4px var(--surface),inset 0 0 0 5.5px var(--ink);transform:rotate(var(--tilt));background:color-mix(in srgb,var(--ink) 8%,var(--surface))}
+.st-ic{font-size:32px;line-height:1}
+.stamp b{font-family:var(--f-mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.25;max-width:110px}
+.stamp.locked{--ink:var(--muted)}
+.stamp.locked .st-ring{border-style:dashed;box-shadow:none;background:transparent;opacity:.6}
+.stamp.locked .st-ic{filter:grayscale(1);opacity:.35}
+.stamp.mini .st-ring{width:44px;height:44px;border-width:2px;box-shadow:inset 0 0 0 3px var(--surface),inset 0 0 0 4px var(--ink)}
+.stamp.mini .st-ic{font-size:19px}
+.stamp.mini b{display:none}
+.stamp.mini{flex:none;width:44px;gap:0}
+.st-strip{display:flex;flex-direction:column;gap:10px;width:100%;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:12px 14px;text-align:left}
+.st-strip-h{display:flex;align-items:center;gap:8px}
+.st-strip-h b{font-family:var(--f-display);font-size:16px;font-weight:700}
+.st-strip-h small{color:var(--muted);font-size:13px;flex:1}
+.st-strip .chev{font-size:20px;color:var(--muted)}
+.st-row{display:flex;gap:8px;overflow:hidden;padding:2px}
+.st-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.st-card{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);padding:14px 10px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.st-card small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.st-date{font-size:11px;color:var(--muted);letter-spacing:.04em}
+.st-prog{display:flex;align-items:center;gap:8px;width:100%;font-size:11.5px;color:var(--muted)}
+.st-prog .meter{flex:1;height:5px}
 .map-search input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}
 .mq-x{flex:none;width:26px;height:26px;margin-right:-6px;border-radius:50%;display:grid;place-items:center;background:var(--line);color:var(--muted)}
 .mq-x svg{width:13px;height:13px}
@@ -1690,6 +1715,7 @@ function render(){
   else if (r.v === "dish"){ title = D[r.id].name; html = viewDish(r.id); }
   else if (r.v === "user"){ title = r.id === me ? "Your passport" : nameOf(r.id); html = viewUser(r.id); }
   else if (r.v === "settings"){ title = "Settings"; html = viewSettings(); }
+  else if (r.v === "stamps"){ title = r.uid === me ? "Your stamps" : shortName(r.uid) + "'s stamps"; html = viewStamps(r.uid); }
   else if (r.v === "ucountry"){ title = shortName(r.uid) + " · " + C[r.id].name; html = viewUserCountry(r.uid, r.id); }
   const bar = $("#bar");
   if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>';
@@ -2059,14 +2085,84 @@ function setupZoom(uid){
   /* trackpad pinch (arrives as ctrl + wheel), or any wheel once zoomed in */
   svg.addEventListener("wheel", e => { if (!e.ctrlKey && !zoomed()) return; e.preventDefault(); stopGlide(); wheelF *= Math.exp(-e.deltaY * 0.004); wheelAt = {x:e.clientX, y:e.clientY}; schedule(); }, {passive:false});
 }
-function badgesFor(st){ return [["First stamp", st.dishes >= 1],["Five-plate club", st.dishes >= 5],["Three passports", st.countries >= 3],["Country complete", COUNTRIES.some(c => c.dishes.every(d => st.tried[d.id]))]]; }
+/* ---------- Stamps ---------- */
+/* kind sets the ink colour: food (red), travel (blue), habits (purple), social (green) */
+const STAMPS = [
+  ["first-bite","First Bite","🍽️","food","Eat your first must-try","dishes",1,"must-try"],
+  ["five-plate","Five-Plate Club","🍴","food","Eat 5 must-trys","dishes",5,"must-trys"],
+  ["quarter","Quarter Century","🥈","food","Eat 25 must-trys","dishes",25,"must-trys"],
+  ["half-century","Half Century","🥇","food","Eat 50 must-trys","dishes",50,"must-trys"],
+  ["clean-plate","Clean Plate","✅","food","Finish every must-try in one country","complete",1,"country"],
+  ["completionist","Completionist","🏆","food","Finish every must-try in 3 countries","complete",3,"countries"],
+  ["thirsty","Thirsty Traveller","🍹","food","Try 3 must-try drinks","drinks",3,"drinks"],
+  ["passport","Passport Stamped","🛂","travel","Eat in 3 countries","countries",3,"countries"],
+  ["frequent-flyer","Frequent Flyer","✈️","travel","Eat in 10 countries","countries",10,"countries"],
+  ["globetrotter","Globetrotter","🌍","travel","Eat in 20 countries","countries",20,"countries"],
+  ["intercontinental","Intercontinental","🧭","travel","Eat on 3 continents","continents",3,"continents"],
+  ["continent-king","Continent King","👑","travel","Eat on 5 continents","continents",5,"continents"],
+  ["whole-world","Whole World on a Plate","🌐","travel","Eat on all 7 continents","continents",7,"continents"],
+  ["jet-setter","Jet Setter","🛫","travel","Eat in 3 countries within a week","jet",3,"countries in a week"],
+  ["snap-happy","Snap Happy","📸","habit","Log 30 meals","photos",30,"meals"],
+  ["regular","The Regular","🔁","habit","Have the same must-try 3 times","same",3,"times"],
+  ["critic","Food Critic","📝","habit","Rate 10 meals","rated",10,"rated"],
+  ["perfect","Perfect Plate","⭐","habit","Give a meal 5 stars","fives",1,"five-star meal"],
+  ["bargain","Bargain Hunter","💰","habit","Log what 5 meals cost","priced",5,"priced"],
+  ["fan-club","Fan Club","❤️","social","Get 10 likes on your meals","likesIn",10,"likes"],
+  ["cheerleader","Cheerleader","👏","social","Like 20 of your friends' meals","likesOut",20,"likes given"]
+].map(([id, name, icon, kind, desc, metric, need, unit]) => ({id, name, icon, kind, desc, metric, need, unit}));
+const dayNum = iso => Math.floor(new Date((iso || "1970-01-01") + "T12:00:00").getTime() / 864e5);
+/* Replays someone's meals in date order, so each stamp knows when it was earned. */
+function stampsFor(uid){
+  const ms = mealsOf(uid).slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created || "").localeCompare(b.created || ""));
+  const tried = {}, countries = new Set(), conts = new Set(), drinks = new Set(), same = {}, earned = {};
+  const v = {dishes:0, complete:0, drinks:0, countries:0, continents:0, jet:0, photos:0, same:0, rated:0, fives:0, priced:0};
+  const check = date => STAMPS.forEach(st => { if (!earned[st.id] && v[st.metric] !== undefined && v[st.metric] >= st.need) earned[st.id] = date || true; });
+  ms.forEach((m, i) => {
+    v.photos++;
+    if (C[m.country]){ countries.add(m.country); conts.add(CONTINENT(m.country)); }
+    v.countries = countries.size; v.continents = conts.size;
+    if (m.dish && D[m.dish]){
+      same[m.dish] = (same[m.dish] || 0) + 1; v.same = Math.max(v.same, same[m.dish]);
+      if (!tried[m.dish]){ tried[m.dish] = true; v.dishes++; if (isDrink(m.dish)) drinks.add(m.dish); v.drinks = drinks.size;
+        const c = C[D[m.dish].country]; if (c && c.dishes.every(d => tried[d.id])) v.complete++; }
+    }
+    if (+m.rating > 0) v.rated++;
+    if (+m.rating >= 5) v.fives++;
+    if (m.price && +m.price.amount > 0) v.priced++;
+    const d = dayNum(m.date), wk = new Set(ms.slice(0, i + 1).filter(x => d - dayNum(x.date) <= 6 && C[x.country]).map(x => x.country));
+    v.jet = Math.max(v.jet, wk.size);
+    check(m.date);
+  });
+  v.likesIn = mealsOf(uid).reduce((t, m) => t + Object.keys(m.likes || {}).filter(k => k !== uid && m.likes[k]).length, 0);
+  v.likesOut = MEALS.filter(m => m.uid !== uid && m.likes && m.likes[uid]).length;
+  check(null);
+  return STAMPS.map(st => ({...st, have:Math.min(v[st.metric] || 0, st.need), got:!!earned[st.id], date:typeof earned[st.id] === "string" ? earned[st.id] : null}));
+}
+const tiltOf = id => { let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0; return (Math.abs(h) % 13) - 6; };
+function stampHTML(st, size){
+  return '<div class="stamp '+st.kind+(st.got ? '' : ' locked')+(size ? ' '+size : '')+'" style="--tilt:'+tiltOf(st.id)+'deg" title="'+esc(st.name+': '+st.desc)+'"><span class="st-ring"><span class="st-ic">'+st.icon+'</span></span><b>'+esc(st.name)+'</b></div>';
+}
+function stampsStrip(uid){
+  const all = stampsFor(uid), got = all.filter(s => s.got).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  return '<button class="st-strip" data-act="stamps" data-uid="'+esc(uid)+'"><span class="st-strip-h"><b>Stamps</b><small><span class="mono">'+got.length+'</span> of '+all.length+'</small><span class="chev" aria-hidden="true">›</span></span>'
+    + (got.length ? '<span class="st-row">'+got.slice(0, 6).map(s => stampHTML(s, 'mini')).join("")+'</span>' : '<span class="hint">'+(uid === me ? 'No stamps yet. Your first must-try earns one.' : 'No stamps yet.')+'</span>')+'</button>';
+}
+function viewStamps(uid){
+  const all = stampsFor(uid), got = all.filter(s => s.got).sort((a, b) => (b.date || "").localeCompare(a.date || "")), todo = all.filter(s => !s.got).sort((a, b) => b.have / b.need - a.have / a.need);
+  let h = '<div class="stack"><div class="hero"><div class="uc-hero">'+avatar(uid, "lg")+'<div><h2>'+esc(nameOf(uid))+'</h2><p><span class="mono">'+got.length+' of '+all.length+'</span> stamps collected</p></div></div>'
+    + '<span class="meter"><i style="width:'+Math.round(got.length / all.length * 100)+'%"></i></span></div>';
+  if (got.length) h += '<div class="section-h"><h2>Collected</h2><span>'+got.length+'</span></div><div class="st-grid">'+got.map(s => '<div class="st-card">'+stampHTML(s)+'<small>'+esc(s.desc)+'</small>'+(s.date ? '<span class="st-date mono">'+stampDate(s.date)+'</span>' : '')+'</div>').join("")+'</div>';
+  if (todo.length) h += '<div class="section-h"><h2>Still to collect</h2><span>'+todo.length+'</span></div><div class="st-grid">'+todo.map(s => '<div class="st-card">'+stampHTML(s)+'<small>'+esc(s.desc)+'</small>'
+      + '<span class="st-prog"><span class="meter"><i style="width:'+Math.round(s.have / s.need * 100)+'%"></i></span><span class="mono">'+s.have+'/'+s.need+'</span></span></div>').join("")+'</div>';
+  return h + '</div>';
+}
 function viewUser(uid){
   const isMe = uid === me, st = statsFor(uid), ms = mealsOf(uid);
   let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : avatar(uid, "lg"))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
      + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
   if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
   h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>';
-  h += '<div class="badges">'+badgesFor(st).map(b => '<span class="badge '+(b[1] ? 'got' : 'not')+'">'+(b[1] ? '✓ ' : '')+esc(b[0])+'</span>').join("")+'</div>';
+  h += stampsStrip(uid);
   h += mapHTML(uid);
   /* Meals: one compact card per country (must-try progress + that country's photos), or every photo as a grid */
   h += '<div class="section-h"><h2>Meals</h2><span>'+ms.length+'</span></div>';
@@ -2306,6 +2402,7 @@ document.addEventListener("click", e => {
     case "ctab": cur().tab = id; render(); break;
     case "pview": cur().pview = id; render(); break;
     case "uc-hl": { const r = cur(); r.hl = r.hl === id ? null : id; applyUcHl(true); break; }
+    case "stamps": closeSheet(); go({v:"stamps", uid:t.dataset.uid || me}); break;
     case "allc": { const sy = window.scrollY, rows = document.querySelector(".cc-list"), top = rows ? rows.getBoundingClientRect().top + sy : sy;
       cur().allc = !!id; render(); if (!id && sy > top) window.scrollTo(0, Math.max(0, top - 120)); break; }
     case "mz": if (mapCtl) mapCtl.button(id); break;
