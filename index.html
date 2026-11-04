@@ -561,6 +561,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0}
 img{max-width:100%}
 body.signed-out .tabs{display:none}
+.upd{position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;align-items:center;gap:12px;justify-content:space-between;background:var(--surface);color:var(--fg);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px 10px 16px;font-size:14px;font-weight:600;max-width:560px;margin-inline:auto}
 .boot{min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--fg)}
 .boot b{font-family:var(--f-display);font-size:20px;font-weight:800;letter-spacing:-.01em}
 .boot-orbit{position:relative;width:148px;height:148px;display:grid;place-items:center;border-radius:50%;border:2px dashed var(--line)}
@@ -1461,6 +1462,18 @@ function boardPicker(){
   return '<select class="board-sel" id="board-sel" aria-label="Leaderboard group">'+[["all","All groups"]].concat(GROUPS.map(g => [g.id, g.name])).map(([id, n]) => '<option value="'+esc(id)+'"'+(boardSel === id ? ' selected' : '')+'>'+esc(n)+'</option>').join("")+'</select>';
 }
 document.addEventListener("change", e => { if (e.target && e.target.id === "board-sel"){ setBoardSel(e.target.value); render(); } });
+/* the app keeps a copy of itself on the phone (see sw.js); when a newer version has been downloaded, offer it */
+if ("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.type === "update-ready") showUpdateBar(); });
+}
+function showUpdateBar(){
+  if (document.getElementById("upd")) return;
+  const d = document.createElement("div"); d.id = "upd"; d.className = "upd"; d.setAttribute("role", "status");
+  d.innerHTML = '<span>A new version of Plate Passport is ready.</span><button class="btn sm primary" data-act="reload-app">Update</button>';
+  document.body.appendChild(d);
+}
+document.addEventListener("click", e => { if (e.target.closest && e.target.closest('[data-act="reload-app"]')) location.reload(); });
 
 
 /* ---------- Notifications (web push) ---------- */
