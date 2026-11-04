@@ -939,6 +939,37 @@ const COUNTRIES = [
   ["patacones","Patacones","🍌","Twice-fried flattened green plantain, the side to almost everything."],
   ["ceviche","Ceviche de corvina","🐟","Sea bass cured in lime with onion and chilli, sold by the cup at the fish market.","Panama City"],
   ["ropavieja","Ropa vieja","🥩","Shredded beef stewed with peppers, onion and tomato, with rice and plantain."]]],
+ ["CN","China","🇨🇳",[
+  ["pekingduck","Peking duck","🦆","Lacquered roast duck carved at the table and wrapped in thin pancakes with spring onion and sweet bean sauce.","Beijing"],
+  ["xiaolongbao","Xiaolongbao","🥟","Soup dumplings: thin pleated wrappers holding pork and a mouthful of hot broth.","Shanghai"],
+  ["mapotofu","Mapo tofu","🌶️","Silky tofu in a fiery, numbing sauce of chilli bean paste, minced beef and Sichuan pepper.","Sichuan"],
+  ["dimsum","Dim sum","🥢","A Cantonese morning of har gow, siu mai and char siu bao, ordered by the basket with tea.","Guangzhou"],
+  ["hotpot","Hotpot","🍲","A bubbling pot of spicy broth in the middle of the table for cooking sliced meat, tofu and greens yourself.","Chongqing"],
+  ["jianbing","Jianbing","🌯","A breakfast crêpe cooked on the street with egg, a crispy cracker, spring onion and sauces, folded to go.","Tianjin"],
+  ["lanzhounoodles","Lanzhou beef noodles","🍜","Hand-pulled noodles in clear beef broth with chilli oil, coriander and radish.","Lanzhou"]]],
+ ["TW","Taiwan","🇹🇼",[
+  ["beefnoodles","Beef noodle soup","🍜","Braised beef shank and chewy noodles in a rich, spiced broth: Taiwan's national comfort food."],
+  ["luroufan","Lu rou fan","🍚","Pork belly braised in soy and five-spice, spooned over a bowl of rice."],
+  ["guabao","Gua bao","🥪","A fluffy steamed bun folded round braised pork belly, pickled mustard greens, peanut powder and coriander."],
+  ["bubbletea","Bubble tea","🧋","Milk tea with chewy tapioca pearls, invented here in the 1980s.","Taichung"],
+  ["stinkytofu","Stinky tofu","🧆","Fermented tofu fried until crisp and served with pickled cabbage. It smells strong but tastes mild."],
+  ["oysteromelette","Oyster omelette","🍳","Oysters set in a sticky egg and sweet potato starch omelette under a sweet red sauce, a night market classic."],
+  ["mangoice","Mango shaved ice","🥭","A mountain of fluffy shaved ice under fresh mango and condensed milk."]]],
+ ["KH","Cambodia","🇰🇭",[
+  ["amok","Fish amok","🐟","Fish steamed in banana leaf with coconut milk and kroeung, a paste of lemongrass, galangal and turmeric."],
+  ["loklak","Lok lak","🥩","Stir-fried marinated beef with a lime and black pepper dip, a fried egg and rice."],
+  ["numbanhchok","Num banh chok","🍜","Fresh rice noodles under a green fish curry with raw herbs and vegetables, sold from baskets at breakfast."],
+  ["kuyteav","Kuy teav","🥣","Pork broth noodle soup with garlic oil, herbs and lime, another breakfast favourite."],
+  ["baisachchrouk","Bai sach chrouk","🍖","Garlic and coconut marinated pork grilled over charcoal, on broken rice with pickles."],
+  ["kepcrab","Crab with Kampot pepper","🦀","Crab stir-fried with fresh green Kampot peppercorns at the seaside crab market.","Kep"]]],
+ ["NZ","New Zealand","🇳🇿",[
+  ["hangi","Hāngī","🔥","The Māori feast of meat and vegetables slow-cooked in an earth oven over hot stones.","Rotorua"],
+  ["pie","Mince and cheese pie","🥧","The bakery staple: flaky pastry filled with minced beef in gravy and melted cheese."],
+  ["pavlova","Pavlova","🍰","Crisp meringue with a marshmallowy middle, topped with cream and kiwifruit. Australia claims it too."],
+  ["hokeypokey","Hokey pokey ice cream","🍦","Vanilla ice cream full of crunchy little lumps of honeycomb toffee."],
+  ["whitebait","Whitebait fritter","🍳","Tiny whitebait bound in egg and fried, served in a slice of white bread with lemon.","West Coast"],
+  ["lamb","Roast lamb","🍖","Slow-roasted lamb with roast vegetables and mint sauce, the classic Kiwi Sunday dinner."],
+  ["flatwhite","Flat white","☕","Silky milk over a double shot. New Zealand and Australia both say they invented it."]]],
  ["ZA","South Africa","🇿🇦",[
   ["braai","Braai","🔥","The South African barbecue: boerewors, chops and sosaties over wood coals."],
   ["bunnychow","Bunny chow","🍞","A hollowed-out loaf filled with curry.","Durban"],
@@ -948,14 +979,14 @@ const COUNTRIES = [
   ["gatsby","Gatsby","🥪","A huge long roll stuffed with chips, meat and sauce, made for sharing.","Cape Town"]]]
 ].forEach(([code,name,flag,ds]) => COUNTRIES.push({code, name, flag, dishes:ds.map(([slug,dn,emoji,desc,region]) => ({id:code.toLowerCase()+"-"+slug, name:dn, emoji, desc, country:code, region}))}));
 COUNTRIES.sort((a,b) => a.name.localeCompare(b.name));
-const CONTINENT = c => ["JP","TH","VN","IN"].includes(c) ? "Asia" : ["US","CA","MX"].includes(c) ? "North America"
+const CONTINENT = c => ["JP","TH","VN","IN","CN","TW","KH"].includes(c) ? "Asia" : ["US","CA","MX"].includes(c) ? "North America"
   : ["GT","BZ","HN","SV","NI","CR","PA"].includes(c) ? "Central America"
   : ["AR","BR","PE","CL","CO","UY","EC","BO","VE"].includes(c) ? "South America"
-  : ["MA","ZA"].includes(c) ? "Africa" : ["AU"].includes(c) ? "Oceania" : "Europe";
+  : ["MA","ZA"].includes(c) ? "Africa" : ["AU","NZ"].includes(c) ? "Oceania" : "Europe";
 const CONTINENTS = ["Europe","North America","Central America","South America","Asia","Africa","Oceania"];
 const C = {}, D = {};
 /* drinks on the must-try lists get "drunk" wording instead of "eaten" */
-const DRINKS = new Set(["de-kolsch","pe-pisco","uy-mate","ma-minttea","vn-eggcoffee","sv-atol"]);
+const DRINKS = new Set(["de-kolsch","pe-pisco","uy-mate","ma-minttea","vn-eggcoffee","sv-atol","tw-bubbletea","nz-flatwhite"]);
 const isDrink = id => DRINKS.has(id);
 COUNTRIES.forEach(c => { C[c.code] = c; c.dishes.forEach(d => D[d.id] = d); });
 [["kaviar","Kölscher Kaviar","🧅","Not caviar at all: Flönz (blood sausage) on a rye roll with raw onion and mustard.","Cologne"],
@@ -2019,7 +2050,8 @@ const CRITERIA = [["taste","Taste","Taste"],["look","Presentation","Presentation
 /* prices: optional, in the local currency by default; value for money is only rated once a price is entered */
 const CUR = {GB:"GBP",IE:"EUR",FR:"EUR",DE:"EUR",IT:"EUR",ES:"EUR",PT:"EUR",GR:"EUR",NL:"EUR",BE:"EUR",AT:"EUR",HR:"EUR",CH:"CHF",CZ:"CZK",PL:"PLN",HU:"HUF",SE:"SEK",DK:"DKK",
   JP:"JPY",TH:"THB",VN:"VND",IN:"INR",US:"USD",CA:"CAD",MX:"MXN",AR:"ARS",BR:"BRL",PE:"PEN",CL:"CLP",CO:"COP",UY:"UYU",EC:"USD",BO:"BOB",VE:"VES",AU:"AUD",MA:"MAD",ZA:"ZAR",
-  GT:"GTQ",BZ:"BZD",HN:"HNL",SV:"USD",NI:"NIO",CR:"CRC",PA:"USD"};
+  GT:"GTQ",BZ:"BZD",HN:"HNL",SV:"USD",NI:"NIO",CR:"CRC",PA:"USD",
+  CN:"CNY",TW:"TWD",KH:"USD",NZ:"NZD"};
 const curOptions = (country, current) => Array.from(new Set([CUR[country] || "EUR", current, "GBP", "EUR", "USD"].filter(Boolean)));
 const hasPrice = () => K && +K.price > 0;
 const effRatings = () => Object.assign({}, K.ratings, hasPrice() ? {} : {value:0});
