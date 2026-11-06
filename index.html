@@ -711,6 +711,9 @@ body.wrap-open{overflow:hidden}
 .wr-card-p{font-weight:700}
 .wr-actions{display:flex;gap:10px}.wr-actions .btn{min-width:120px}.wr .btn:not(.primary){background:rgba(255,255,255,.15);color:#fff;border-color:transparent}.wr .btn.primary{background:#fff;color:#1D3FA6;border-color:#fff}
 @media (prefers-reduced-motion: reduce){.wr *{animation:none!important}}
+.paste-link{align-self:center;font-size:14px;font-weight:600;color:var(--accent);padding:4px 8px}
+.paste-ask{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;background:var(--accent-soft);border-radius:var(--r-md);padding:14px}
+.paste-ask .btn{margin-top:4px;min-width:180px}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -1331,6 +1334,7 @@ async function startSession(session){
     .subscribe();
   if (!(PEOPLE[me] && PEOPLE[me].nick) && !askedNick){ askedNick = true; askNick(); }
   flushOutbox();
+  handleIncoming();   /* a photo sent from the Photos app (Shortcut or Android share sheet) */
 }
 let refreshT = null;
 function scheduleRefresh(){ clearTimeout(refreshT); refreshT = setTimeout(refresh, 300); }
@@ -1874,6 +1878,49 @@ function wrapCard(uid){
   const yrs = yearsFor(uid); if (!yrs.length) return "";
   const y = yrs[0], now = new Date().getFullYear(), label = y === now && new Date().getMonth() < 11 ? y + " so far" : String(y);
   return '<button class="wr-open" data-act="wrap" data-uid="'+esc(uid)+'"><span class="wr-open-ic">🎁</span><span class="t"><b>'+(uid === me ? 'Your' : esc(shortName(uid))+'\'s')+' '+label+' on a plate</b><small>Year in review: meals, countries, best bites and more</small></span><span class="chev" aria-hidden="true">›</span></button>';
+}
+
+
+/* ---------- Photos from outside the app ----------
+   iPhone: a Shortcut in the Photos share sheet copies the photo and opens /?log=paste, then one tap pastes it in.
+   Android: the app appears in the share sheet itself; the photo arrives via the service worker (/?log=shared). */
+async function usePhotoFile(file){
+  if (!K) openComposer(""); if (!K) return;
+  K.busy = true; K.pasteAsk = false; renderComposer();
+  try { const {img} = await loadImg(file); initCrop(img); K.thumb = null; K.full = null; } catch(err) { photoError(err); }
+  K.busy = false; renderComposer();
+}
+async function pastePhoto(){
+  if (!navigator.clipboard || !navigator.clipboard.read){ toast("This browser can't paste photos. Choose it from your library instead."); return; }
+  try {
+    const items = await navigator.clipboard.read();
+    for (const it of items){
+      const type = it.types.find(t => t.startsWith("image/"));
+      if (type){ const blob = await it.getType(type); await usePhotoFile(new File([blob], "photo." + (type.split("/")[1] || "png"), {type})); return; }
+    }
+    toast("There's no photo copied. Copy one first, or choose from your library.");
+  } catch(e) {
+    toast(e && e.name === "NotAllowedError" ? "Tap Paste when your phone asks, to use the copied photo." : "Couldn't paste the photo. Choose it from your library instead.");
+  }
+}
+function pasteRow(){
+  if (!navigator.clipboard || !navigator.clipboard.read) return "";
+  return K && K.pasteAsk
+    ? '<div class="paste-ask"><b>Your photo is ready</b><span class="hint">Tap below, then tap Paste when your phone asks.</span><button class="btn primary" data-act="paste-photo">Paste photo</button></div>'
+    : '<button class="paste-link" data-act="paste-photo">Or paste a copied photo</button>';
+}
+async function handleIncoming(){
+  const q = new URLSearchParams(location.search).get("log"); if (!q) return;
+  history.replaceState(null, "", location.pathname);
+  if (q === "paste"){ openComposer(""); if (K){ K.pasteAsk = true; renderComposer(); } }
+  else if (q === "shared"){
+    try {
+      const cache = await caches.open("opp-share"), res = await cache.match("/shared-photo");
+      if (!res){ openComposer(""); return; }
+      const blob = await res.blob(); await cache.delete("/shared-photo");
+      await usePhotoFile(new File([blob], "shared." + ((blob.type || "image/jpeg").split("/")[1]), {type:blob.type || "image/jpeg"}));
+    } catch(e) { openComposer(""); }
+  }
 }
 
 
@@ -2641,6 +2688,7 @@ function renderComposer(){
          + '<div class="crop-ctrl"><label class="label" for="crop-z">Zoom</label><input id="crop-z" type="range" min="1" max="4" step="0.01" value="'+K.crop.z+'"></div>'
        : '<label class="drop" for="c-file">'+(K.thumb ? '<img src="'+K.thumb+'" alt="Your photo">' : I.camera+'<b style="color:var(--fg)">'+(K.busy ? 'Preparing photo…' : 'Add your photo')+'</b><span class="hint">Tap to choose from your phone or computer</span>')+'</label>')
    + '<input id="c-file" class="vh" type="file" accept="image/*,.heic,.heif">'
+   + (!K.srcImg && !K.thumb && !K.editId && !K.busy ? pasteRow() : '')
    + (K.srcImg || K.thumb ? '<p class="hint">Location data in the photo is removed. '+(!K.srcImg && K.thumb ? '<a href="#" data-act="crop-existing">Reposition this photo</a> · ' : '')+'<a href="#" data-act="pick-again">Choose a different photo</a></p>' : '')
    + '<div class="p-grid"><div class="field"><label class="label" for="c-country">Country</label><select id="c-country"><option value="">Choose a country</option>'+COUNTRIES.map(x => '<option value="'+x.code+'"'+(x.code === K.country ? ' selected' : '')+'>'+x.flag+' '+esc(x.name)+'</option>').join("")+'</select></div>'
    + '<div class="field"><label class="label" for="c-date">Date</label><input id="c-date" type="date" value="'+esc(K.date)+'" max="'+todayISO()+'"></div></div>'
@@ -2772,6 +2820,7 @@ document.addEventListener("click", e => {
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
       sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
     case "gsel": setGroupSel(id); render(); break;
+    case "paste-photo": pastePhoto(); break;
     case "wrap": openWrap(t.dataset.uid || me); break;
     case "mem-role": { const [gid, email, role] = id.split("|"), g = groupById(gid) || {name:"the group"};
       if (role === "member"){ setRole(gid, email, role); break; }

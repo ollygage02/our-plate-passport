@@ -3,7 +3,7 @@
       The page is shown from that copy and quietly re-downloaded; when a newer version arrives,
       the open page is told so it can offer a reload.
    2. Receives notifications while the app is closed. */
-const SHELL = "opp-shell-v1";
+const SHELL = "opp-shell-v1";  /* "opp-share" holds a photo shared from Android for a moment */
 const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 const WORLD_MAP = "https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js";
 const PAGES = ["/", "/config.js"];                       // fresh copy fetched every launch, cached copy shown first
@@ -13,7 +13,7 @@ self.addEventListener("install", e => {
   e.waitUntil(caches.open(SHELL).then(c => Promise.all([...PAGES, ...FIXED].map(u => c.add(new Request(u, {cache: "reload"})).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => e.waitUntil(
-  caches.keys().then(keys => Promise.all(keys.filter(k => k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+  caches.keys().then(keys => Promise.all(keys.filter(k => k !== SHELL && k !== "opp-share").map(k => caches.delete(k)))).then(() => self.clients.claim())));
 
 const tell = msg => self.clients.matchAll({type: "window", includeUncontrolled: true}).then(list => list.forEach(c => c.postMessage(msg)));
 const sig = r => r ? (r.headers.get("etag") || "") + "|" + (r.headers.get("last-modified") || "") + "|" + (r.headers.get("content-length") || "") : "";
@@ -47,6 +47,17 @@ function cacheFirst(event) {
 
 self.addEventListener("fetch", e => {
   const req = e.request;
+  /* Android share sheet: keep the shared photo for a moment and open the meal form */
+  if (req.method === "POST" && new URL(req.url).pathname === "/share-target") {
+    e.respondWith((async () => {
+      try {
+        const form = await req.formData(), file = form.getAll("photo").find(f => f && f.type && f.type.startsWith("image/"));
+        if (file) await (await caches.open("opp-share")).put("/shared-photo", new Response(file, {headers: {"Content-Type": file.type}}));
+      } catch (err) {}
+      return Response.redirect("/?log=shared", 303);
+    })());
+    return;
+  }
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
