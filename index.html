@@ -662,6 +662,55 @@ html.app button,html.app a,html.app label{touch-action:manipulation}
 .wm-logo{width:26px;height:30px;flex:none;background:currentColor;-webkit-mask:url(logo-passport.png) center/contain no-repeat;mask:url(logo-passport.png) center/contain no-repeat}
 .bar .wordmark{font-size:clamp(17px,5.4vw,22px);white-space:nowrap;min-width:0}
 .pend{position:absolute;left:8px;bottom:8px;z-index:2;background:rgba(0,0,0,.72);color:#fff;font-size:11.5px;font-weight:700;padding:4px 8px;border-radius:999px;letter-spacing:.01em;pointer-events:none}
+.wr-open{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:var(--r-md);text-align:left;color:#fff;background:linear-gradient(120deg,#2340B8,#7B3FD6 55%,#E2456B);box-shadow:var(--shadow)}
+.wr-open-ic{font-size:26px;line-height:1}
+.wr-open .t{flex:1;min-width:0}.wr-open b{display:block;font-family:var(--f-display);font-size:16px;font-weight:800}.wr-open small{display:block;font-size:12.5px;opacity:.85}
+.wr-open .chev{font-size:22px;opacity:.85}
+body.wrap-open{overflow:hidden}
+.wr{position:fixed;inset:0;z-index:80;color:#fff;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 10px) 18px calc(env(safe-area-inset-bottom,0px) + 18px);overflow:hidden;user-select:none;-webkit-user-select:none;transition:background .4s}
+.wr.g1{background:linear-gradient(160deg,#1D3FA6,#0B1B4D)}.wr.g2{background:linear-gradient(160deg,#E2456B,#7B1E4A)}.wr.g3{background:linear-gradient(160deg,#0F8A6A,#0A3D33)}
+.wr.g4{background:linear-gradient(160deg,#F2A93B,#B8461E)}.wr.g5{background:linear-gradient(160deg,#7B3FD6,#2A1260)}.wr.g6{background:linear-gradient(160deg,#16181C,#3A2A1A)}
+.wr.g7{background:linear-gradient(160deg,#D93A5B,#5A0F2A)}.wr.g8{background:linear-gradient(160deg,#1C8FD6,#123A7A)}.wr.g9{background:linear-gradient(160deg,#2E9E4F,#0E3B22)}
+.wr.g10{background:linear-gradient(160deg,#B8461E,#3E1408)}.wr.g11{background:linear-gradient(160deg,#3B3FD6,#151550)}.wr.g12{background:linear-gradient(160deg,#E2456B,#F2A93B)}.wr.g13{background:linear-gradient(160deg,#1D3FA6,#7B3FD6)}
+.wr-top{display:flex;align-items:center;gap:10px}
+.wr-prog{flex:1;display:flex;gap:4px}.wr-prog i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.3);overflow:hidden;position:relative}
+.wr-prog i.done{background:#fff}.wr-prog i.now::after{content:"";position:absolute;inset:0;background:#fff;transform-origin:left;animation:wr-fill .6s ease-out both}
+@keyframes wr-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.wr-x{width:36px;height:36px;display:grid;place-items:center;color:#fff;border-radius:50%;background:rgba(255,255,255,.15)}.wr-x svg{width:18px;height:18px}
+.wr-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;max-width:520px;width:100%;margin:0 auto;min-height:0}
+.wr-body>*{animation:wr-up .55s cubic-bezier(.2,.7,.2,1) both}.wr-body>*:nth-child(2){animation-delay:.08s}.wr-body>*:nth-child(3){animation-delay:.16s}.wr-body>*:nth-child(4){animation-delay:.24s}.wr-body>*:nth-child(5){animation-delay:.32s}
+@keyframes wr-up{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+.wr h1{font-family:var(--f-display);font-weight:800;font-size:clamp(40px,12vw,64px);line-height:1;letter-spacing:-.02em}
+.wr h2{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1.15}
+.wr-kicker{font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
+.wr-sub{font-size:16px;opacity:.9;line-height:1.4}
+.wr-hint{margin-top:18px;font-size:13px;opacity:.7;animation:wr-pulse 1.6s ease-in-out infinite!important}@keyframes wr-pulse{50%{opacity:.35}}
+.wr-logo .wm-logo{width:64px;height:74px;color:#fff;display:block}
+.wr-years{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.wr-years button{color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:999px;padding:6px 14px;font-weight:700}.wr-years button.on{background:#fff;color:#1D3FA6}
+.wr-collage{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:min(320px,80vw)}
+.wr-collage>span{animation:wr-pop .5s cubic-bezier(.2,.9,.3,1.3) both;animation-delay:calc(.3s + var(--i) * .07s)}.wr-collage .photo{aspect-ratio:1;border-radius:10px}
+@keyframes wr-pop{from{opacity:0;transform:scale(.6) rotate(-6deg)}to{opacity:1;transform:none}}
+.wr-flags{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;font-size:40px;line-height:1;max-width:340px}.wr-flags span{animation:wr-pop .45s both;animation-delay:calc(.25s + var(--i) * .08s)}
+.wr-hero-flag{font-size:110px;line-height:1;animation:wr-pop .6s both .1s}
+.wr-dishes{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:360px}.wr-dishes span{background:rgba(255,255,255,.16);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:600;animation:wr-pop .4s both;animation-delay:calc(.25s + var(--i) * .06s)}
+.wr-photo{width:min(300px,72vw)}.wr-photo .photo{border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.4)}
+.wr-bars{display:flex;align-items:flex-end;gap:6px;height:150px;width:min(320px,82vw)}.wr-bars span{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px}
+.wr-bars i{display:block;width:100%;height:var(--h);background:rgba(255,255,255,.35);border-radius:6px 6px 2px 2px;transform-origin:bottom;animation:wr-grow .7s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(.2s + var(--i) * .04s)}
+.wr-bars .top i{background:#fff}.wr-bars b{font-size:11px;opacity:.75}@keyframes wr-grow{from{transform:scaleY(0)}}
+.wr-vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(360px,88vw)}.wr-vs>div{background:rgba(255,255,255,.12);border-radius:18px;padding:16px 12px;display:flex;flex-direction:column;gap:6px}
+.wr-vs small{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.8}.wr-vs b{font-family:var(--f-display);font-size:28px}.wr-vs span{font-size:14px;opacity:.9}
+.wr-stamps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:min(340px,88vw)}.wr-stamps>span{animation:wr-pop .45s both;animation-delay:calc(.3s + var(--i) * .08s)}
+.wr-stamps .stamp{--ink:#fff!important;color:#fff}.wr-stamps .st-ring{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 4px transparent,inset 0 0 0 5.5px #fff}.wr-stamps .stamp b{font-size:9.5px}
+.wr-board{display:flex;flex-direction:column;gap:6px;width:min(320px,86vw)}.wr-board div{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;animation:wr-up .45s both;animation-delay:calc(.3s + var(--i) * .08s)}
+.wr-board div.me{background:#fff;color:#151550}.wr-board span{font-weight:800;width:20px}.wr-board b{flex:1;text-align:left}.wr-board em{font-style:normal;font-weight:800}
+.wr-persona{font-size:clamp(36px,11vw,58px)!important}
+.wr-card{width:min(330px,86vw);background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.wr-card-h{display:flex;align-items:center;gap:10px;justify-content:center}.wr-card-h .wm-logo{width:24px;height:28px;color:#fff}.wr-card-h b{font-family:var(--f-display);font-size:22px;font-weight:800}
+.wr-card-photo .photo{border-radius:14px}
+.wr-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.wr-card-grid div{display:flex;flex-direction:column}.wr-card-grid b{font-family:var(--f-display);font-size:24px;font-weight:800}.wr-card-grid span{font-size:11.5px;opacity:.8}
+.wr-card-p{font-weight:700}
+.wr-actions{display:flex;gap:10px}.wr-actions .btn{min-width:120px}.wr .btn:not(.primary){background:rgba(255,255,255,.15);color:#fff;border-color:transparent}.wr .btn.primary{background:#fff;color:#1D3FA6;border-color:#fff}
+@media (prefers-reduced-motion: reduce){.wr *{animation:none!important}}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -1670,6 +1719,164 @@ window.addEventListener("online", () => {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flushOutbox(); });
 
 
+/* ---------- Year in review ("Wrapped") ----------
+   A full-screen story of someone's year on a plate: tap the right side for the next card, the left to go back. */
+const WR_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const yearsFor = uid => Array.from(new Set(mealsOf(uid).filter(m => !m.pending && m.date).map(m => +m.date.slice(0, 4)))).sort((a, b) => b - a);
+function wrapStats(uid, year){
+  const all = mealsOf(uid).filter(m => !m.pending), ms = all.filter(m => m.date && +m.date.slice(0, 4) === year)
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created || "").localeCompare(b.created || ""));
+  if (!ms.length) return null;
+  const before = new Set(all.filter(m => m.dish && m.date && +m.date.slice(0, 4) < year).map(m => m.dish));
+  const byCountry = {}, byMonth = Array(12).fill(0), dishCount = {};
+  ms.forEach(m => { byCountry[m.country] = (byCountry[m.country] || 0) + 1; byMonth[+m.date.slice(5, 7) - 1]++; if (m.dish) dishCount[m.dish] = (dishCount[m.dish] || 0) + 1; });
+  const countries = Object.keys(byCountry).filter(c => C[c]).sort((a, b) => byCountry[b] - byCountry[a]);
+  const continents = Array.from(new Set(countries.map(CONTINENT)));
+  const newDishes = Array.from(new Set(ms.filter(m => m.dish && D[m.dish] && !before.has(m.dish)).map(m => m.dish)));
+  const triedNow = new Set(all.filter(m => m.dish && m.date && +m.date.slice(0, 4) <= year).map(m => m.dish));
+  const completed = countries.filter(c => C[c].dishes.every(d => triedNow.has(d.id)) && C[c].dishes.some(d => newDishes.includes(d.id)));
+  const rated = ms.filter(m => +m.rating > 0), best = rated.slice().sort((a, b) => b.rating - a.rating || (b.date || "").localeCompare(a.date || ""))[0] || null;
+  const likesOf = m => Object.keys(m.likes || {}).filter(k => k !== uid && m.likes[k]).length;
+  const loved = ms.slice().sort((a, b) => likesOf(b) - likesOf(a))[0]; const lovedCount = loved ? likesOf(loved) : 0;
+  const busiest = byMonth.indexOf(Math.max(...byMonth));
+  const priced = ms.filter(m => m.price && +m.price.amount > 0);
+  const repeat = Object.entries(dishCount).sort((a, b) => b[1] - a[1])[0];
+  const drinks = ms.filter(m => m.dish && isDrink(m.dish)).length;
+  const stamps = stampsFor(uid).filter(s => s.got && s.date && +s.date.slice(0, 4) === year);
+  const avg = rated.length ? rated.reduce((t, m) => t + +m.rating, 0) / rated.length : 0;
+  /* a light-hearted label for the year */
+  const persona = continents.length >= 3 ? ["The Globetrotter", "Three continents or more. Your fork has a passport of its own."]
+    : completed.length ? ["The Completionist", "You don't just try a country. You finish it."]
+    : repeat && repeat[1] >= 3 ? ["The Loyalist", "When you find a favourite, you stick with it."]
+    : drinks >= Math.max(2, ms.length / 3) ? ["The Sipper", "Half of travelling is what's in the glass."]
+    : avg >= 4.3 ? ["The Easy Pleaser", "Almost everything you ate was a hit."]
+    : newDishes.length >= 10 ? ["The Collector", "New must-try after new must-try."]
+    : ["The Curious Eater", "Always up for whatever's local."];
+  /* where you ranked among people you share a group with, by new must-trys this year */
+  const others = Object.keys(PEOPLE).filter(id => id !== uid);
+  const scoreOf = id => { const a = mealsOf(id).filter(m => !m.pending), pre = new Set(a.filter(m => m.dish && m.date && +m.date.slice(0, 4) < year).map(m => m.dish));
+    return new Set(a.filter(m => m.dish && D[m.dish] && m.date && +m.date.slice(0, 4) === year && !pre.has(m.dish)).map(m => m.dish)).size; };
+  const board = [uid].concat(others).map(id => [id, id === uid ? newDishes.length : scoreOf(id)]).filter(([id, sc]) => id === uid || sc > 0).sort((a, b) => b[1] - a[1]);
+  const rank = board.findIndex(([id]) => id === uid) + 1;
+  return {uid, year, ms, countries, byCountry, continents, newDishes, completed, best, loved, lovedCount, byMonth, busiest, priced, repeat, stamps, persona, rank, board};
+}
+let WR = null;
+function openWrap(uid, year){
+  const yrs = yearsFor(uid); year = year || yrs[0];
+  const s = wrapStats(uid, year); if (!s){ toast("No meals logged yet, so there's nothing to look back on."); return; }
+  WR = {s, i:0, slides:wrapSlides(s), years:yrs};
+  let el = document.getElementById("wrap");
+  if (!el){ el = document.createElement("div"); el.id = "wrap"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); document.body.appendChild(el); }
+  document.body.classList.add("wrap-open"); wrapDraw();
+}
+function closeWrap(){ const el = document.getElementById("wrap"); if (el) el.remove(); document.body.classList.remove("wrap-open"); WR = null; }
+const wrBig = n => '<span class="wr-num" data-n="'+n+'">'+n+'</span>';
+const wrYou = s => s.uid === me ? "You" : esc(shortName(s.uid));
+const wrYours = s => s.uid === me ? "your" : esc(shortName(s.uid)) + "'s";
+function wrapSlides(s){
+  const out = [], name = s.uid === me ? "Your" : esc(nameOf(s.uid)) + "'s";
+  out.push(["g1", '<div class="wr-logo"><span class="wm-logo"></span></div><p class="wr-kicker">Plate Passport</p><h1>'+name+' '+s.year+'<br>on a plate</h1>'
+    + (WR_years(s).length > 1 ? '<div class="wr-years">'+WR_years(s).map(y => '<button data-wr-year="'+y+'" class="'+(y === s.year ? 'on' : '')+'">'+y+'</button>').join("")+'</div>' : '')
+    + '<p class="wr-hint">Tap to start</p>']);
+  const collage = s.ms.filter(m => m.thumb).slice(-9).reverse();
+  out.push(["g2", '<p class="wr-kicker">This year '+(s.uid === me ? 'you' : esc(shortName(s.uid)))+' logged</p><h1>'+wrBig(s.ms.length)+'<br>meal'+(s.ms.length === 1 ? '' : 's')+'</h1>'
+    + (collage.length ? '<div class="wr-collage">'+collage.map((m, i) => '<span style="--i:'+i+'">'+photoHTML(m, false)+'</span>').join("")+'</div>' : '')]);
+  out.push(["g3", '<p class="wr-kicker">'+wrYou(s)+' ate in</p><h1>'+wrBig(s.countries.length)+' countr'+(s.countries.length === 1 ? 'y' : 'ies')+'</h1>'
+    + '<div class="wr-flags">'+s.countries.map((c, i) => '<span style="--i:'+i+'" title="'+esc(C[c].name)+'">'+C[c].flag+'</span>').join("")+'</div>'
+    + '<p class="wr-sub">across '+s.continents.length+' continent'+(s.continents.length === 1 ? '' : 's')+': '+s.continents.map(esc).join(", ")+'</p>']);
+  if (s.countries.length){ const top = s.countries[0];
+    out.push(["g4", '<p class="wr-kicker">Most of '+wrYours(s)+' meals were in</p><div class="wr-hero-flag">'+C[top].flag+'</div><h1>'+esc(C[top].name)+'</h1><p class="wr-sub">'+s.byCountry[top]+' meal'+(s.byCountry[top] === 1 ? '' : 's')+' there</p>']); }
+  out.push(["g5", '<p class="wr-kicker">New must-trys ticked off</p><h1>'+wrBig(s.newDishes.length)+'</h1>'
+    + (s.newDishes.length ? '<div class="wr-dishes">'+s.newDishes.slice(0, 8).map((d, i) => '<span style="--i:'+i+'">'+D[d].emoji+' '+esc(D[d].name)+'</span>').join("")+(s.newDishes.length > 8 ? '<span style="--i:8">+'+(s.newDishes.length - 8)+' more</span>' : '')+'</div>' : '')
+    + (s.completed.length ? '<p class="wr-sub">and '+(s.uid === me ? 'you' : 'they')+' finished every must-try in '+s.completed.map(c => C[c].flag+' '+esc(C[c].name)).join(", ")+'</p>' : '')]);
+  if (s.best) out.push(["g6", '<p class="wr-kicker">Best thing '+(s.uid === me ? 'you' : 'they')+' ate</p><div class="wr-photo">'+photoHTML(s.best, true)+'</div><h2>'+esc(dishName(s.best))+'</h2>'
+    + '<p class="wr-sub">'+'★'.repeat(Math.round(s.best.rating))+' '+(+s.best.rating).toFixed(1)+(s.best.place ? ' · '+esc(s.best.place) : '')+' · '+(C[s.best.country] ? C[s.best.country].flag : '')+'</p>']);
+  if (s.loved && s.lovedCount > 0) out.push(["g7", '<p class="wr-kicker">The group\'s favourite</p><div class="wr-photo">'+photoHTML(s.loved, true)+'</div><h2>'+esc(dishName(s.loved))+'</h2><p class="wr-sub">❤️ '+s.lovedCount+' like'+(s.lovedCount === 1 ? '' : 's')+'</p>']);
+  const maxM = Math.max(...s.byMonth);
+  out.push(["g8", '<p class="wr-kicker">'+(s.uid === me ? 'Your' : esc(shortName(s.uid))+'\'s')+' hungriest month</p><h1>'+WR_MONTHS[s.busiest]+'</h1>'
+    + '<div class="wr-bars">'+s.byMonth.map((n, i) => '<span class="'+(i === s.busiest ? 'top' : '')+'" style="--h:'+(maxM ? Math.max(4, n / maxM * 100) : 4)+'%;--i:'+i+'"><i></i><b>'+WR_MONTHS[i][0]+'</b></span>').join("")+'</div>'
+    + '<p class="wr-sub">'+s.byMonth[s.busiest]+' meal'+(s.byMonth[s.busiest] === 1 ? '' : 's')+'</p>']);
+  /* prices are only compared within one currency: the one used most this year */
+  const byCur = {}; s.priced.forEach(m => (byCur[m.price.cur] = byCur[m.price.cur] || []).push(m));
+  const curMeals = Object.values(byCur).sort((a, b) => b.length - a.length)[0] || [];
+  if (curMeals.length >= 2){ const pr = curMeals.slice().sort((a, b) => +b.price.amount - +a.price.amount);
+    out.push(["g9", '<p class="wr-kicker">Splurge vs steal</p><div class="wr-vs"><div><small>Priciest plate</small><b>'+esc(priceText(pr[0].price))+'</b><span>'+esc(dishName(pr[0]))+'</span></div><div><small>Best bargain</small><b>'+esc(priceText(pr[pr.length - 1].price))+'</b><span>'+esc(dishName(pr[pr.length - 1]))+'</span></div></div>']); }
+  if (s.stamps.length) out.push(["g10", '<p class="wr-kicker">Stamps collected</p><h1>'+wrBig(s.stamps.length)+'</h1><div class="wr-stamps">'+s.stamps.map((st, i) => '<span style="--i:'+i+'">'+stampHTML(st)+'</span>').join("")+'</div>']);
+  if (s.board.length > 1) out.push(["g11", '<p class="wr-kicker">In '+(s.uid === me ? 'your' : 'their')+' groups</p><h1>#'+s.rank+'</h1><p class="wr-sub">for new must-trys in '+s.year+'</p>'
+    + '<div class="wr-board">'+s.board.slice(0, 5).map(([id, sc], i) => '<div class="'+(id === s.uid ? 'me' : '')+'" style="--i:'+i+'"><span>'+(i + 1)+'</span><b>'+esc(id === me ? 'You' : nameOf(id))+'</b><em>'+sc+'</em></div>').join("")+'</div>']);
+  out.push(["g12", '<p class="wr-kicker">'+(s.uid === me ? 'Your' : esc(shortName(s.uid))+'\'s')+' '+s.year+' food personality</p><h1 class="wr-persona">'+esc(s.persona[0])+'</h1><p class="wr-sub">'+esc(s.persona[1])+'</p>']);
+  out.push(["g13", '<div class="wr-card"><div class="wr-card-h"><span class="wm-logo"></span><b>'+name+' '+s.year+'</b></div>'
+    + (s.best ? '<div class="wr-card-photo">'+photoHTML(s.best, false)+'</div>' : '')
+    + '<div class="wr-card-grid"><div><b>'+s.ms.length+'</b><span>meals</span></div><div><b>'+s.countries.length+'</b><span>countries</span></div><div><b>'+s.continents.length+'</b><span>continents</span></div><div><b>'+s.newDishes.length+'</b><span>must-trys</span></div><div><b>'+s.stamps.length+'</b><span>stamps</span></div><div><b>'+s.countries.map(c => C[c].flag).slice(0, 3).join("")+'</b><span>top places</span></div></div>'
+    + '<p class="wr-card-p">'+esc(s.persona[0])+'</p></div>'
+    + '<div class="wr-actions"><button class="btn primary" data-wr="share">Share</button><button class="btn" data-wr="again">Watch again</button></div>']);
+  return out;
+}
+function WR_years(s){ return WR ? WR.years : yearsFor(s.uid); }
+function wrapDraw(){
+  const el = document.getElementById("wrap"); if (!el || !WR) return;
+  const [g, body] = WR.slides[WR.i];
+  el.className = "wr " + g;
+  el.innerHTML = '<div class="wr-top"><div class="wr-prog">'+WR.slides.map((_, k) => '<i class="'+(k < WR.i ? 'done' : k === WR.i ? 'now' : '')+'"></i>').join("")+'</div>'
+    + '<button class="wr-x" data-wr="close" aria-label="Close">'+I.close+'</button></div>'
+    + '<div class="wr-body">'+body+'</div>';
+  el.querySelectorAll(".wr-num").forEach(n => { const to = +n.dataset.n; if (!to || matchMedia("(prefers-reduced-motion: reduce)").matches) return; const t0 = performance.now();
+    const step = t => { const k = Math.min(1, (t - t0) / 900); n.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); }; n.textContent = "0"; requestAnimationFrame(step); });
+}
+document.addEventListener("click", e => {
+  const el = document.getElementById("wrap"); if (!el || !WR || !el.contains(e.target)) return;
+  const b = e.target.closest("[data-wr],[data-wr-year]");
+  if (b && b.dataset.wrYear){ openWrap(WR.s.uid, +b.dataset.wrYear); WR.i = 1; wrapDraw(); return; }
+  if (b && b.dataset.wr === "close"){ closeWrap(); return; }
+  if (b && b.dataset.wr === "again"){ WR.i = 0; wrapDraw(); return; }
+  if (b && b.dataset.wr === "share"){ shareWrap(); return; }
+  if (e.target.closest(".wr-actions")) return;
+  const left = e.clientX < window.innerWidth * 0.3;
+  WR.i = Math.max(0, Math.min(WR.slides.length - 1, WR.i + (left ? -1 : 1))); wrapDraw();
+});
+document.addEventListener("keydown", function(e){
+  if (!WR) return;
+  if (e.key === "Escape") closeWrap();
+  else if (e.key === "ArrowRight" || e.key === " "){ e.preventDefault(); WR.i = Math.min(WR.slides.length - 1, WR.i + 1); wrapDraw(); }
+  else if (e.key === "ArrowLeft"){ WR.i = Math.max(0, WR.i - 1); wrapDraw(); }
+});
+/* a story-sized picture of the summary, for Instagram, WhatsApp or the camera roll */
+async function shareWrap(){
+  const s = WR.s, W = 1080, H = 1920, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const x = cv.getContext("2d"), css = getComputedStyle(document.body).getPropertyValue("--f-display").trim() || "sans-serif";
+  const gr = x.createLinearGradient(0, 0, W, H); gr.addColorStop(0, "#1D3FA6"); gr.addColorStop(1, "#0B1B4D"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  x.fillStyle = "#fff"; x.textAlign = "center";
+  x.font = "700 44px " + css; x.globalAlpha = .8; x.fillText("PLATE PASSPORT", W / 2, 150); x.globalAlpha = 1;
+  x.font = "800 92px " + css; x.fillText((s.uid === me ? (PEOPLE[me] && PEOPLE[me].nick || "My") : nameOf(s.uid)).split(" ")[0] + "'s " + s.year, W / 2, 270);
+  let y = 330;
+  if (s.best && s.best.thumb){
+    try {
+      const img = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = rej; im.src = s.best.photo || s.best.thumb; });
+      const w = 820, h = 615, ix = (W - w) / 2, sc = Math.max(w / img.width, h / img.height), sw = w / sc, sh = h / sc;
+      x.save(); x.beginPath(); x.roundRect ? x.roundRect(ix, y, w, h, 40) : x.rect(ix, y, w, h); x.clip();
+      x.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, ix, y, w, h); x.restore();
+      x.font = "600 40px " + css; x.fillText("Best bite: " + dishName(s.best), W / 2, y + h + 70); y += h + 110;
+    } catch(e) { y += 40; }
+  }
+  const cells = [[s.ms.length, "meals"], [s.countries.length, "countries"], [s.continents.length, "continents"], [s.newDishes.length, "must-trys"], [s.stamps.length, "stamps"], ["#" + (s.rank || 1), "in the group"]];
+  cells.forEach((c, i) => { const cx = W / 2 + ((i % 3) - 1) * 300, cy = y + 120 + Math.floor(i / 3) * 230;
+    x.font = "800 110px " + css; x.fillText(String(c[0]), cx, cy); x.font = "600 38px " + css; x.globalAlpha = .8; x.fillText(c[1], cx, cy + 60); x.globalAlpha = 1; });
+  x.font = "800 64px " + css; x.fillText(s.persona[0], W / 2, H - 170);
+  x.font = "500 34px " + css; x.globalAlpha = .7; x.fillText("Who's been eating what", W / 2, H - 100); x.globalAlpha = 1;
+  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+  const file = new File([blob], "plate-passport-" + s.year + ".png", {type:"image/png"});
+  if (navigator.canShare && navigator.canShare({files:[file]})){ try { await navigator.share({files:[file], title:"My " + s.year + " on a plate"}); return; } catch(e) { if (e && e.name === "AbortError") return; } }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+  toast("Image saved.");
+}
+/* the button on a passport */
+function wrapCard(uid){
+  const yrs = yearsFor(uid); if (!yrs.length) return "";
+  const y = yrs[0], now = new Date().getFullYear(), label = y === now && new Date().getMonth() < 11 ? y + " so far" : String(y);
+  return '<button class="wr-open" data-act="wrap" data-uid="'+esc(uid)+'"><span class="wr-open-ic">🎁</span><span class="t"><b>'+(uid === me ? 'Your' : esc(shortName(uid))+'\'s')+' '+label+' on a plate</b><small>Year in review: meals, countries, best bites and more</small></span><span class="chev" aria-hidden="true">›</span></button>';
+}
+
+
 /* ---------- Notifications (web push) ---------- */
 const pushOK = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!(window.OPP_CONFIG && OPP_CONFIG.vapidPublicKey);
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
@@ -2311,7 +2518,7 @@ function viewUser(uid){
      + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
   h = h.replace(/<\/div><\/div>$/, '</div>'+stampsBadge(uid)+'</div>');   /* stamps sit to the right of the name */
   if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
-  h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>';
+  h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>' + wrapCard(uid);
   h += mapHTML(uid);
   /* Meals: one compact card per country (must-try progress + that country's photos), or every photo as a grid */
   h += '<div class="section-h"><h2>Meals</h2><span>'+ms.length+'</span></div>';
@@ -2565,6 +2772,7 @@ document.addEventListener("click", e => {
     case "save-pass": { const v = ($("#newpass").value || ""); if (v.length < 8){ toast("Use at least 8 characters."); break; }
       sb.auth.updateUser({password:v}).then(({error}) => { if (error) toast("Couldn't change your password. Try again."); else { closeSheet(); toast("Password updated."); } }); break; }
     case "gsel": setGroupSel(id); render(); break;
+    case "wrap": openWrap(t.dataset.uid || me); break;
     case "mem-role": { const [gid, email, role] = id.split("|"), g = groupById(gid) || {name:"the group"};
       if (role === "member"){ setRole(gid, email, role); break; }
       openSheet('<div class="stack"><h2 style="font-size:20px">Make '+esc(email)+' an admin of '+esc(g.name)+'?</h2><p class="hint">Admins can add and remove people, make other admins, rename the group and delete it.</p><div class="row-btns"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="mem-role-yes" data-id="'+esc(id)+'">Make admin</button></div></div>'); break; }
