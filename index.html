@@ -661,6 +661,7 @@ html.app button,html.app a,html.app label{touch-action:manipulation}
 .board-note{color:var(--muted);font-size:13px}
 .wm-logo{width:26px;height:30px;flex:none;background:currentColor;-webkit-mask:url(logo-passport.png) center/contain no-repeat;mask:url(logo-passport.png) center/contain no-repeat}
 .bar .wordmark{font-size:clamp(17px,5.4vw,22px);white-space:nowrap;min-width:0}
+.pend{position:absolute;left:8px;bottom:8px;z-index:2;background:rgba(0,0,0,.72);color:#fff;font-size:11.5px;font-weight:700;padding:4px 8px;border-radius:999px;letter-spacing:.01em;pointer-events:none}
 .mem-list{display:flex;flex-direction:column}
 .mem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .mem:first-child{border-top:0}
@@ -1255,15 +1256,20 @@ async function startSession(session){
   if (uid && uid === sessionFor && mode === "shared") return;
   sessionFor = uid;
   if (liveChannel){ sb.removeChannel(liveChannel); liveChannel = null; }
-  if (!uid){ clearCache(); me = null; myEmail = ""; MEALS = []; PEOPLE = {}; GROUPS = []; mode = "signedout"; authView = "signin"; authMsg = ""; stack = [{v:"feed"}]; render(); return; }
+  if (!uid){ clearCache(); OUTBOX_MEALS = []; me = null; myEmail = ""; MEALS = []; PEOPLE = {}; GROUPS = []; mode = "signedout"; authView = "signin"; authMsg = ""; stack = [{v:"feed"}]; render(); return; }
   me = uid; myEmail = (session.user.email || "").toLowerCase();
+  await loadOutbox();   /* meals logged with no signal, still waiting to upload */
   /* this device's last copy of the group shows instantly; fresh data replaces it a moment later */
   const cached = loadCache(uid);
   if (cached && applyRows(cached)){ mode = "shared"; lastRowsJSON = JSON.stringify(cached); render(); } else { mode = "connecting"; render(); }
   const [mem] = await Promise.all([
     sb.from("group_members").select("group_id").eq("email", myEmail),
     sb.from("profiles").upsert({id:me}, {onConflict:"id", ignoreDuplicates:true})]);
-  if (mem.error && cached){ toast("Couldn't reach the server. Showing what's saved on this phone."); return; }
+  if (mem.error && (cached || isNetErr(mem.error))){
+    if (!cached){ mode = "shared"; mergeOutbox(); render(); }
+    toast(navigator.onLine === false ? "You're offline. Showing what's saved on this phone." : "Couldn't reach the server. Showing what's saved on this phone.");
+    return;
+  }
   if (mem.error || !(mem.data || []).length){ clearCache(); mode = "notmember"; render(); return; }
   await refresh(true);   /* stays on the loading screen until the first data has arrived */
   openMealFromLink(); initPush();
@@ -1275,6 +1281,7 @@ async function startSession(session){
     .on("postgres_changes", {event:"*", schema:"public", table:"group_members"}, scheduleRefresh)
     .subscribe();
   if (!(PEOPLE[me] && PEOPLE[me].nick) && !askedNick){ askedNick = true; askNick(); }
+  flushOutbox();
 }
 let refreshT = null;
 function scheduleRefresh(){ clearTimeout(refreshT); refreshT = setTimeout(refresh, 300); }
@@ -1311,6 +1318,7 @@ function applyRows(d){
     if (groupSel !== "all" && !GROUPS.some(x => x.id === groupSel)) setGroupSel("all");
     if (boardSel !== "all" && !GROUPS.some(x => x.id === boardSel)) setBoardSel("all");
   }
+  mergeOutbox();
   return true;
 }
 /* a copy of the last data on this device, so the app opens instantly (cleared on sign out) */
@@ -1359,7 +1367,8 @@ async function uploadPhoto(path, blob){
   return path;
 }
 const removeFiles = paths => { const ps = paths.filter(Boolean); if (ps.length) sb.storage.from("photos").remove(ps).catch(() => {}); };
-async function addMeal(m, blobs){
+async function addMeal(m, blobs, wasNew){
+  if (navigator.onLine === false) return queueMeal(m, blobs, wasNew);   /* no signal: keep it on the phone */
   try {
     const id = newId(), base = me + "/" + id + "-" + Date.now().toString(36);
     const thumb_path = await uploadPhoto(base + "-t.jpg", blobs.thumb);
@@ -1368,7 +1377,7 @@ async function addMeal(m, blobs){
       ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, photo_path, thumb_path});
     if (error){ removeFiles([thumb_path, photo_path]); throw error; }
     m.id = id; await refresh(); return true;
-  } catch(e){ writeFailed(e); return false; }
+  } catch(e){ if (isNetErr(e)) return queueMeal(m, blobs, wasNew); writeFailed(e); return false; }
 }
 async function toggleLike(m){
   const on = !(m.likes && m.likes[me]);
@@ -1560,6 +1569,105 @@ function splashOut(){
     el.addEventListener("transitionend", done, {once:true}); setTimeout(done, 900);
   }));
 }
+
+
+/* ---------- Offline logging ----------
+   With no signal, a new meal (with its photos) is kept on the phone in an "outbox" and shown straight away
+   marked "Waiting to upload". As soon as the phone is back online it uploads by itself. */
+const OUTBOX_DB = "opp-outbox", OUTBOX_STORE = "meals";
+let OUTBOX_MEALS = [], flushing = false, flushTimer = 0;
+const isNetErr = e => { const msg = String((e && (e.message || e.error_description || e.details)) || e || ""); return e instanceof TypeError || /failed to fetch|load failed|networkerror|network request failed|network connection|internet connection|offline|timed? ?out/i.test(msg); };
+function idb(){
+  return new Promise((res, rej) => {
+    if (!window.indexedDB){ rej(new Error("no IndexedDB")); return; }
+    const r = indexedDB.open(OUTBOX_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(OUTBOX_STORE, {keyPath:"id"});
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function obRun(mode, fn){ const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction(OUTBOX_STORE, mode), q = fn(tx.objectStore(OUTBOX_STORE)); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); }); }
+const obAll = () => obRun("readonly", s => s.getAll()).then(r => r || []);
+const obPut = item => obRun("readwrite", s => s.put(item));
+const obDel = id => obRun("readwrite", s => s.delete(id));
+
+/* what's waiting, as meals the rest of the app can show */
+function asPendingMeal(it){
+  const old = OUTBOX_MEALS.find(x => x.id === it.id);
+  return Object.assign({}, it.meal, {id:it.id, uid:it.uid, likes:{}, pending:true,
+    thumb:old ? old.thumb : URL.createObjectURL(it.thumb), photo:old ? old.photo : (it.full ? URL.createObjectURL(it.full) : null)});
+}
+async function loadOutbox(){
+  try { OUTBOX_MEALS = (await obAll()).filter(it => it.uid === me).map(asPendingMeal); } catch(e) { OUTBOX_MEALS = []; }
+  mergeOutbox();
+}
+function mergeOutbox(){
+  const real = MEALS.filter(m => !m.pending), ids = new Set(real.map(m => m.id));
+  MEALS = OUTBOX_MEALS.filter(m => !ids.has(m.id) && m.uid === me).concat(real);
+}
+async function queueMeal(m, blobs, wasNew){
+  const id = newId();
+  const meal = {dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption, ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, created:m.created};
+  try { await obPut({id, uid:me, meal, thumb:blobs.thumb, full:blobs.full || null, wasNew:!!wasNew, queuedAt:Date.now()}); }
+  catch(e) { console.error(e); toast("Couldn't save the meal on this phone. Try again when you have signal."); return false; }
+  m.id = id;
+  OUTBOX_MEALS.unshift(asPendingMeal({id, uid:me, meal, thumb:blobs.thumb, full:blobs.full}));
+  mergeOutbox(); render(); scheduleFlush(30000);
+  return "queued";
+}
+function scheduleFlush(ms){ clearTimeout(flushTimer); if (OUTBOX_MEALS.length) flushTimer = setTimeout(flushOutbox, ms); }
+async function flushOutbox(){
+  if (flushing || !sb || !me || mode !== "shared" || navigator.onLine === false) return;
+  flushing = true;   /* claimed before any waiting, so two triggers at once can't both upload */
+  let items; try { items = (await obAll()).filter(it => it.uid === me); } catch(e) { flushing = false; return; }
+  if (!items.length){ flushing = false; return; }
+  let sent = 0, stuck = false;
+  try {
+    for (const it of items.sort((a, b) => a.queuedAt - b.queuedAt)){
+      try {
+        const base = me + "/" + it.id + "-" + Date.now().toString(36);
+        const thumb_path = await uploadPhoto(base + "-t.jpg", it.thumb);
+        const photo_path = it.full ? await uploadPhoto(base + ".jpg", it.full) : null;
+        const {error} = await sb.from("meals").insert(Object.assign({id:it.id, user_id:me}, {dish:it.meal.dish, custom:it.meal.custom, country:it.meal.country, date:it.meal.date,
+          place:it.meal.place, caption:it.meal.caption, ratings:it.meal.ratings, rating:it.meal.rating, price:it.meal.price, ratio:it.meal.ratio, photo_path, thumb_path}));
+        if (error && !/duplicate key|already exists/i.test(error.message || "")){ removeFiles([thumb_path, photo_path]); throw error; }
+        await obDel(it.id); sent++;
+        const done = OUTBOX_MEALS.find(x => x.id === it.id);
+        if (done){ try { URL.revokeObjectURL(done.thumb); if (done.photo) URL.revokeObjectURL(done.photo); } catch(e) {} }
+        OUTBOX_MEALS = OUTBOX_MEALS.filter(x => x.id !== it.id);
+        if (typeof announceMeal === "function") announceMeal(Object.assign({}, it.meal, {id:it.id}), it.wasNew);
+      } catch(e) {
+        if (isNetErr(e)){ stuck = true; break; }           /* still no signal: try again later */
+        console.error("saved meal failed to upload", e); stuck = true;
+      }
+    }
+  } finally { flushing = false; }
+  if (sent){ toast(sent === 1 ? "Your saved meal has uploaded." : sent + " saved meals have uploaded."); await refresh(); }
+  if (stuck) scheduleFlush(45000);
+}
+function pendingBadge(){ return '<span class="pend" title="Saved on this phone, uploads when you\'re back online">⤴ Waiting to upload</span>'; }
+/* show the badge on pending photos, and keep likes/edits/deletes away from meals the server hasn't got yet */
+const _photoHTML = photoHTML;
+photoHTML = function(m, big){ const h = _photoHTML(m, big); return m && m.pending ? h.replace(/<\/span>$/, pendingBadge() + '</span>') : h; };
+const _toggleLike = toggleLike;
+toggleLike = function(m){ if (m && m.pending){ toast("This meal is still waiting to upload."); return; } return _toggleLike.apply(this, arguments); };
+const _openEditor = openEditor;
+openEditor = function(m){ if (m && m.pending){ toast("You can edit it once it has uploaded."); return; } return _openEditor.apply(this, arguments); };
+const _deleteMeal = deleteMeal;
+deleteMeal = async function(m){
+  if (m && m.pending){
+    try { await obDel(m.id); } catch(e) {}
+    OUTBOX_MEALS = OUTBOX_MEALS.filter(x => x.id !== m.id); MEALS = MEALS.filter(x => x.id !== m.id);
+    closeSheet(); render(); toast("Removed. It won't be uploaded."); return;
+  }
+  return _deleteMeal.apply(this, arguments);
+};
+/* back online, the app coming to the front, or a regular nudge: upload anything waiting and catch up */
+window.addEventListener("online", () => {
+  if (!sb || !me) return;
+  if (mode === "shared" && !liveChannel){ sessionFor = null; sb.auth.getSession().then(({data}) => { if (data && data.session) startSession(data.session); }).catch(() => {}); }
+  else flushOutbox();
+});
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flushOutbox(); });
 
 
 /* ---------- Notifications (web push) ---------- */
@@ -2419,12 +2527,13 @@ async function postMeal(){
   const m = {uid:me, dish:K.dish === "__other" ? null : K.dish, custom:K.dish === "__other" ? K.custom.trim() : "", country:K.country, date:K.date || todayISO(),
     place:K.place.trim(), caption:K.caption.trim(), ratings:effRatings(), rating:overallOf(effRatings()), price:priceObj(), ratio:K.frame < 1 ? "3:4" : "4:3", likes:{}, created:new Date().toISOString()};
   const wasNew = m.dish && !triedMap(me)[m.dish];
-  const ok = await addMeal(m, {thumb:K.thumbBlob, full:K.full});
+  const ok = await addMeal(m, {thumb:K.thumbBlob, full:K.full}, wasNew);
   if (!ok){ K.posting = false; renderComposer(); return; }
-  announceMeal(m, wasNew);
+  if (ok === true) announceMeal(m, wasNew);
   closeSheet(); K = null;
   if (m.dish) go({v:"dish", id:m.dish}); else go({v:"user", id:me}, true);
-  toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
+  if (ok === "queued") toast("No signal, so it's saved on your phone. It'll upload by itself when you're back online.");
+  else toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
 }
 
 /* ---------- Events ---------- */
