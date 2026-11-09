@@ -719,6 +719,17 @@ body.wrap-open{overflow:hidden}
 .mem:first-child{border-top:0}
 .mem span{min-width:0;overflow-wrap:anywhere}
 .mem small{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;margin-left:4px}
+
+/* swipe back */
+html.sw-on{overflow-x:hidden}
+html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100vh;box-shadow:-12px 0 32px rgba(0,0,0,.16);will-change:transform}
+.sw-under{position:fixed;inset:0;z-index:1;background:var(--bg);overflow:hidden;pointer-events:none;will-change:transform}
+.sw-under>.sw-view,.sw-under>.sw-bar{position:absolute;margin:0;box-sizing:border-box}
+.sw-shade{position:fixed;inset:0;z-index:1;background:#000;opacity:0;pointer-events:none}
+.sheet{will-change:transform}
+.sw-discard{position:absolute;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:3;max-width:536px;margin-inline:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--surface);color:var(--fg);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,.28);padding:10px 12px 10px 16px;font-size:15px;font-weight:600;animation:up .2s ease-out}
+.sw-btns{display:flex;gap:8px}
+.sw-del{background:var(--stamp);border-color:var(--stamp);color:#fff}
 .notif{gap:10px}
 .notif-list{display:flex;flex-direction:column}
 .notif-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
@@ -1965,7 +1976,7 @@ function pasteRow(){
 }
 async function handleIncoming(){
   const q = new URLSearchParams(location.search).get("log"); if (!q) return;
-  history.replaceState(null, "", location.pathname);
+  history.replaceState(history.state, "", location.pathname);
   if (q === "paste"){ openComposer(""); if (K){ K.pasteAsk = true; renderComposer(); } }
   else if (q === "shared"){
     try {
@@ -1974,6 +1985,260 @@ async function handleIncoming(){
       const blob = await res.blob(); await cache.delete("/shared-photo");
       await usePhotoFile(new File([blob], "shared." + ((blob.type || "image/jpeg").split("/")[1]), {type:blob.type || "image/jpeg"}));
     } catch(e) { openComposer(""); }
+  }
+}
+
+
+/* ---------- Swipe back ----------
+   Works like an iPhone app:
+   - drag a screen to the right to go back; the screen you came from shows underneath as you drag
+   - drag a sheet (Log a meal, a meal's details) right or down to close it
+   - swipe between year-in-review slides, pull down to close it
+   The phone's own Back (Android's back gesture, the browser's back button) steps back inside the app too. */
+const SW_EDGE = 28;            /* a drag starting this close to the left edge always means "back" */
+let SW = null, swPopIgnore = 0, swPopTimer = 0;
+const swW = () => window.innerWidth || document.documentElement.clientWidth || 390;
+const swSheetOpen = () => { const w = $("#sheet-wrap"); return !!(w && !w.hidden); };
+
+/* keep a copy of the screen being left (and where it was scrolled to) so a swipe back can show it underneath */
+const _goSw = go;
+go = function(r, reset){
+  if (!reset && stack.length){
+    const v = $("#view"), b = $("#bar"), c = cur();
+    c.y = window.scrollY;
+    if (v && b){
+      const vr = v.getBoundingClientRect(), br = b.getBoundingClientRect();
+      c.snap = {view:v.cloneNode(true), bar:b.cloneNode(true), v:[vr.left, vr.top, vr.width], b:[br.left, br.top, br.width]};
+    }
+  }
+  return _goSw.apply(this, arguments);
+};
+/* going back returns to the same spot on the page */
+const _backSw = back;
+back = function(){
+  const n = stack.length;
+  _backSw.apply(this, arguments);
+  if (stack.length < n){ const c = cur(), y = c.y || 0; delete c.snap; window.scrollTo(0, y); }
+};
+
+/* ---- the phone's Back button / gesture ---- */
+function swCanBack(){ return !!document.getElementById("wrap") || swSheetOpen() || (stack.length > 1 && !!me); }
+function syncHist(){
+  try {
+    const on = !!(history.state && history.state.opp);
+    if (swCanBack()){ if (!on) history.pushState({opp:1}, ""); }
+    else if (on && !swPopIgnore){
+      swPopIgnore++; clearTimeout(swPopTimer); swPopTimer = setTimeout(() => { swPopIgnore = 0; }, 1500);
+      history.back();
+    }
+  } catch(e) {}
+}
+try { if (history.state && history.state.opp) history.replaceState(null, ""); } catch(e) {}
+window.addEventListener("popstate", () => {
+  if (swPopIgnore){ swPopIgnore--; syncHist(); return; }
+  if (document.getElementById("wrap")) closeWrap();
+  else if (swSheetOpen()) closeSheet();
+  else if (stack.length > 1) back();
+  syncHist();
+});
+const _renderSw = render;
+render = function(){ const r = _renderSw.apply(this, arguments); syncHist(); return r; };
+const _openSheetSw = openSheet;
+openSheet = function(){ swResetSheet(); swHideDiscard(); const r = _openSheetSw.apply(this, arguments); syncHist(); return r; };
+const _closeSheetSw = closeSheet;
+closeSheet = function(){ swHideDiscard(); const r = _closeSheetSw.apply(this, arguments); swResetSheet(); syncHist(); return r; };
+const _openWrapSw = openWrap;
+openWrap = function(){ const r = _openWrapSw.apply(this, arguments); syncHist(); return r; };
+const _closeWrapSw = closeWrap;
+closeWrap = function(){ const r = _closeWrapSw.apply(this, arguments); syncHist(); return r; };
+function swResetSheet(){
+  const s = $("#sheet"), sc = document.querySelector("#sheet-wrap .scrim");
+  if (s){ s.style.transform = ""; s.style.transition = ""; }
+  if (sc){ sc.style.opacity = ""; sc.style.transition = ""; }
+}
+
+/* ---- don't lose a half-logged meal to a stray swipe ---- */
+const swSig = () => K ? JSON.stringify([K.country, K.dish, K.custom, K.place, K.date, K.caption, K.ratings, K.price, K.cur, K.frame]) : "";
+function swMark(){ if (K){ K._sig = swSig(); K._thumb = K.thumb; K._src = K.srcImg; } }
+const _openComposerSw = openComposer;
+openComposer = function(){ const r = _openComposerSw.apply(this, arguments); swMark(); return r; };
+const _openEditorSw = openEditor;
+openEditor = function(){ const r = _openEditorSw.apply(this, arguments); swMark(); return r; };
+function swComposerDirty(){
+  const h = document.querySelector("#sheet .sheet-h h2");
+  if (!K || K._sig === undefined || !h || !/^(Log a meal|Edit meal)$/.test(h.textContent)) return false;
+  return swSig() !== K._sig || K.thumb !== K._thumb || K.srcImg !== K._src;
+}
+function swAskDiscard(){
+  if (document.getElementById("sw-discard")) return;
+  const d = document.createElement("div"); d.id = "sw-discard"; d.className = "sw-discard"; d.setAttribute("role", "alertdialog");
+  d.innerHTML = '<span>'+(K && K.editId ? 'Discard your changes?' : 'Discard this meal?')+'</span><span class="sw-btns"><button class="btn sm" data-act="sw-keep">Keep editing</button><button class="btn sm sw-del" data-act="sw-discard">Discard</button></span>';
+  $("#sheet-wrap").appendChild(d);
+}
+function swHideDiscard(){ const d = document.getElementById("sw-discard"); if (d) d.remove(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest('[data-act="sw-keep"],[data-act="sw-discard"]'); if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.act === "sw-discard") closeSheet(); else swHideDiscard();
+}, true);
+
+/* ---- the gesture ---- */
+/* places where a sideways drag already means something else */
+function swBlocked(t){
+  if (!t || !t.closest) return true;
+  if (t.closest("input, textarea, select, [contenteditable], .cropper, svg.world, #sw-discard")) return true;
+  for (let e = t; e && e !== document.body && e.nodeType === 1; e = e.parentElement){
+    if (e.scrollWidth > e.clientWidth + 1 && e.scrollLeft > 0){ const ox = getComputedStyle(e).overflowX; if (ox === "auto" || ox === "scroll") return true; }
+  }
+  return false;
+}
+/* a touch at the very edge over the map goes to the swipe, not to panning the map */
+document.addEventListener("pointerdown", e => {
+  if (e.pointerType === "touch" && e.clientX < SW_EDGE && stack.length > 1 && !swSheetOpen() && !document.getElementById("wrap")
+      && navigator.standalone !== false && e.target.closest && e.target.closest("svg.world")) e.stopPropagation();
+}, true);
+
+document.addEventListener("touchstart", e => {
+  if (SW && SW.anim) return;
+  SW = null;
+  if (e.touches.length !== 1 || mode === "signedout") return;
+  const t = e.touches[0], target = e.target, edge = t.clientX < SW_EDGE;
+  let kind = null;
+  if (document.getElementById("wrap")){ if (document.getElementById("wrap").contains(target)) kind = "wrap"; }
+  else if (swSheetOpen()){ if (target.closest && target.closest("#sheet")) kind = "sheet"; }
+  else if (stack.length > 1 && target.closest && !target.closest(".tabs, #sheet-wrap, #splash, .upd, .toast, #toast")) kind = "page";
+  if (!kind) return;
+  /* in Safari (not the Home Screen app) the left edge belongs to Safari's own back swipe */
+  if (kind === "page" && edge && navigator.standalone === false) return;
+  const sheet = $("#sheet"), inTop = target.closest && target.closest(".grip, .sheet-h");
+  SW = {kind, x0:t.clientX, y0:t.clientY, dx:0, dy:0, dir:null, pts:[[e.timeStamp, t.clientX, t.clientY]],
+    blockX:swBlocked(target) && !(kind === "page" && edge && !(target.closest && target.closest("input, textarea, select"))),
+    allowY:kind === "wrap" || (kind === "sheet" && (inTop || (sheet.scrollTop <= 0 && !(target.closest && target.closest("textarea, .cropper, select")))))};
+}, {passive:true});
+
+document.addEventListener("touchmove", e => {
+  if (!SW || SW.anim) return;
+  if (e.touches.length !== 1){ swRelease(true); return; }
+  const t = e.touches[0], dx = t.clientX - SW.x0, dy = t.clientY - SW.y0;
+  const okX = d => !SW.blockX && (SW.kind === "wrap" || d > 0);
+  if (!SW.dir){
+    /* hold the page still from the very first move if this looks like a sideways swipe (iPhone decides early) */
+    if (e.cancelable && ((Math.abs(dx) > Math.abs(dy) && okX(dx)) || (SW.kind === "sheet" && SW.allowY && dy > 0 && dy > Math.abs(dx)))) e.preventDefault();
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    const horiz = Math.abs(dx) > Math.abs(dy) * 1.2, vert = Math.abs(dy) > Math.abs(dx) * 1.2;
+    if (horiz && okX(dx)) SW.dir = "x";
+    else if (vert && dy > 0 && SW.allowY) SW.dir = "y";
+    if (!SW.dir || !e.cancelable){ SW = null; return; }
+    swBegin();
+  }
+  e.preventDefault();
+  SW.dx = dx; SW.dy = dy;
+  SW.pts.push([e.timeStamp, t.clientX, t.clientY]); if (SW.pts.length > 8) SW.pts.shift();
+  if (!SW.raf) SW.raf = requestAnimationFrame(swPaint);
+}, {passive:false});
+document.addEventListener("touchend", () => swRelease(false));
+document.addEventListener("touchcancel", () => swRelease(true));
+
+function swBegin(){
+  if (SW.kind === "page"){
+    const below = stack[stack.length - 2], snap = below && below.snap;
+    const under = document.createElement("div"); under.className = "sw-under"; under.setAttribute("aria-hidden", "true");
+    if (snap){
+      const v = snap.view.cloneNode(true), b = snap.bar.cloneNode(true);
+      [[v, snap.v], [b, snap.b]].forEach(([el, [l, tp, w]]) => { el.removeAttribute("id"); Object.assign(el.style, {left:l + "px", top:tp + "px", width:w + "px"}); });
+      v.classList.add("sw-view"); b.classList.add("sw-bar");
+      under.appendChild(v); under.appendChild(b);
+    }
+    const shade = document.createElement("div"); shade.className = "sw-shade";
+    const app = $("#app"); app.parentNode.insertBefore(shade, app.nextSibling); app.parentNode.insertBefore(under, shade);
+    SW.under = under; SW.shade = shade;
+    document.documentElement.classList.add("sw-on");
+  }
+  if (SW.kind === "sheet"){ const s = $("#sheet"); s.style.transition = "none"; swHideDiscard(); }
+  if (SW.kind === "wrap"){ const w = document.getElementById("wrap"); if (w) w.style.transition = "none"; }
+}
+
+function swPaint(){
+  if (!SW) return; SW.raf = 0; if (SW.anim) return;
+  const W = swW();
+  if (SW.kind === "page") swPagePos(Math.max(0, SW.dx));
+  else if (SW.kind === "sheet"){
+    const s = $("#sheet"), sc = document.querySelector("#sheet-wrap .scrim");
+    if (SW.dir === "x"){ const x = Math.max(0, SW.dx); s.style.transform = "translate3d(" + x + "px,0,0)"; if (sc) sc.style.opacity = String(Math.max(0, 1 - x / W)); }
+    else { const y = Math.max(0, SW.dy); s.style.transform = "translate3d(0," + y + "px,0)"; if (sc) sc.style.opacity = String(Math.max(0, 1 - y / Math.max(200, s.offsetHeight))); }
+  }
+  else if (SW.kind === "wrap"){
+    const w = document.getElementById("wrap"); if (!w) return;
+    if (SW.dir === "y"){ const y = Math.max(0, SW.dy); w.style.transform = "translate3d(0," + y + "px,0) scale(" + (1 - Math.min(.08, y / 3000)) + ")"; w.style.opacity = String(Math.max(.4, 1 - y / 900)); }
+    else w.style.transform = "translate3d(" + (SW.dx * .25) + "px,0,0)";
+  }
+}
+function swPagePos(x){
+  const p = Math.min(1, x / swW());
+  $("#app").style.transform = x ? "translate3d(" + x + "px,0,0)" : "";
+  if (SW.under) SW.under.style.transform = "translate3d(" + (-28 * (1 - p)) + "%,0,0)";
+  if (SW.shade) SW.shade.style.opacity = String(.1 * (1 - p));
+}
+/* speed of the last part of the drag, in px per ms */
+function swSpeed(){
+  const pts = SW.pts, last = pts[pts.length - 1], recent = pts.filter(p => last[0] - p[0] <= 100), first = recent[0];
+  const dt = Math.max(1, last[0] - first[0]);
+  return [(last[1] - first[1]) / dt, (last[2] - first[2]) / dt];
+}
+
+function swRelease(cancel){
+  if (!SW || SW.anim) return;
+  if (!SW.dir){ SW = null; return; }
+  if (SW.raf){ cancelAnimationFrame(SW.raf); SW.raf = 0; swPaint(); }
+  const [vx, vy] = swSpeed(), W = swW(), g = SW;
+  g.anim = true;
+  const ease = "cubic-bezier(.2,.7,.2,1)";
+  const after = (ms, fn) => setTimeout(() => { fn(); if (SW === g) SW = null; }, ms);
+
+  if (g.kind === "page"){
+    const done = !cancel && vx > -0.15 && (g.dx > W * .33 || (vx > .35 && g.dx > 20));
+    const ms = done ? Math.round(120 + 160 * (1 - Math.min(1, g.dx / W))) : 200;
+    const app = $("#app");
+    [app, g.under].forEach(el => { if (el) el.style.transition = "transform " + ms + "ms " + ease; });
+    if (g.shade) g.shade.style.transition = "opacity " + ms + "ms " + ease;
+    requestAnimationFrame(() => swPagePos(done ? W : 0));
+    after(ms + 20, () => {
+      /* all in one go, so the real previous screen replaces the copy in a single frame */
+      app.style.transform = ""; app.style.transition = "";
+      if (g.under) g.under.remove(); if (g.shade) g.shade.remove();
+      document.documentElement.classList.remove("sw-on");
+      if (done) back();
+    });
+    return;
+  }
+
+  if (g.kind === "sheet"){
+    const s = $("#sheet"), sc = document.querySelector("#sheet-wrap .scrim"), H = Math.max(200, s.offsetHeight);
+    let done = !cancel && (g.dir === "x" ? (vx > -0.15 && (g.dx > W * .3 || (vx > .35 && g.dx > 20))) : (vy > -0.15 && (g.dy > H * .25 || (vy > .4 && g.dy > 20))));
+    const keep = done && swComposerDirty();
+    if (keep) done = false;
+    const ms = done ? 200 : 220;
+    s.style.transition = "transform " + ms + "ms " + ease; if (sc) sc.style.transition = "opacity " + ms + "ms " + ease;
+    requestAnimationFrame(() => {
+      s.style.transform = done ? (g.dir === "x" ? "translate3d(" + W + "px,0,0)" : "translate3d(0," + (H + 40) + "px,0)") : "";
+      if (sc) sc.style.opacity = done ? "0" : "";
+    });
+    after(ms + 20, () => { if (done) closeSheet(); else { swResetSheet(); if (keep) swAskDiscard(); } });
+    return;
+  }
+
+  if (g.kind === "wrap"){
+    const w = document.getElementById("wrap");
+    if (g.dir === "y"){
+      const done = !cancel && (g.dy > 140 || (vy > .45 && g.dy > 30));
+      if (w){ w.style.transition = "transform 220ms " + ease + ", opacity 220ms " + ease; requestAnimationFrame(() => { w.style.transform = done ? "translate3d(0,100%,0)" : ""; w.style.opacity = done ? "0" : ""; }); }
+      after(240, () => { if (done) closeWrap(); else if (w){ w.style.transition = ""; } });
+    } else {
+      const step = cancel ? 0 : (g.dx < -50 || vx < -.3) ? 1 : (g.dx > 50 || vx > .3) ? -1 : 0;
+      if (w){ w.style.transition = "transform 160ms " + ease; requestAnimationFrame(() => { w.style.transform = ""; }); }
+      if (step && WR){ WR.i = Math.max(0, Math.min(WR.slides.length - 1, WR.i + step)); wrapDraw(); }
+      after(180, () => { if (w) w.style.transition = ""; });
+    }
   }
 }
 
@@ -2062,7 +2327,7 @@ function openMealFromLink(url){
   try {
     const id = new URL(url || location.href, location.origin).searchParams.get("meal"); if (!id) return;
     const m = findMeal(id); if (m) openSheet(postCard(m));
-    if (!url) history.replaceState(null, "", location.pathname);
+    if (!url) history.replaceState(history.state, "", location.pathname);
   } catch(e) {}
 }
 if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.type === "open") openMealFromLink(e.data.url); });
