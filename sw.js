@@ -64,6 +64,7 @@ self.addEventListener("fetch", e => {
     if (req.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") { e.respondWith(staleWhileRevalidate(e, "/")); return; }
     if (url.pathname === "/config.js") { e.respondWith(staleWhileRevalidate(e, "/config.js")); return; }
     if (FIXED.includes(url.pathname)) { e.respondWith(cacheFirst(e)); return; }
+    if (url.pathname.startsWith("/i18n/")) { e.respondWith(cacheFirst(e)); return; }
     return;
   }
   if (req.url === SUPABASE_JS || req.url === WORLD_MAP) { e.respondWith(cacheFirst(e)); return; }

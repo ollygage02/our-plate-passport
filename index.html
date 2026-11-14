@@ -22,6 +22,17 @@
   document.addEventListener("touchmove", function(e){ if (e.touches.length > 1 && !(e.target.closest && e.target.closest("svg.world, .cropper"))) e.preventDefault(); }, {passive:false});
 })();
 </script>
+<script>
+/* Language: the saved choice, else the phone's own language if the app has it, else English.
+   Chinese and Spanish text lives in /i18n/ and is only downloaded when chosen. */
+(function(){
+  var l = null; try { l = localStorage.getItem("opp-lang"); } catch(e) {}
+  if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
+  if (l !== "zh" && l !== "es") l = "en";
+  document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=1"><\/script>');
+})();
+</script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
 <meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1311" media="(prefers-color-scheme: dark)">
@@ -736,6 +747,9 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row:first-child{border-top:0}
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
+.lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
+.auth-lang{max-width:420px;margin:16px auto 0;width:100%}
+.auth-lang .lang-seg{box-shadow:none;background:transparent;border:1px solid var(--line)}
 </style>
 </head>
 <body class="signed-out">
@@ -764,6 +778,86 @@ window.BOOT_HTML = "<div class=\"boot\" role=\"status\" aria-label=\"Loading Pla
 (function(){
 "use strict";
 const $ = s => document.querySelector(s);
+
+/* ---------- Language ----------
+   English is built in. For Chinese or Spanish, /i18n/<lang>.js is loaded in the page head and holds the
+   translations: a dictionary of exact phrases plus patterns for text with numbers or names in it.
+   Everything on screen is translated as it appears (see trWatch), and dish and country names are
+   swapped at start-up so search works in the chosen language. People's own words are left alone. */
+const I18N = window.OPP_I18N && window.OPP_I18N.dict ? window.OPP_I18N : null;
+const LANG = I18N ? I18N.lang : "en";
+const LANGS = [["en", "English"], ["zh", "中文"], ["es", "Español"]];
+const TR_CACHE = new Map();
+function trCore(s, depth){
+  const d = I18N.dict;
+  if (Object.prototype.hasOwnProperty.call(d, s)) return d[s];
+  if (depth > 4) return s;
+  /* "Germany · Berlin speciality": each part on its own */
+  if (s.indexOf(" · ") > 0){
+    const parts = s.split(" · "), out = parts.map(x => trCore(x, depth + 1));
+    if (out.some((x, i) => x !== parts[i])) return out.join(" · ");
+  }
+  for (const [re, fn] of I18N.patterns){
+    const m = s.match(re);
+    if (m){ const r = fn(m, x => trCore(x, depth + 1)); if (r != null) return r; }
+  }
+  /* emoji, flags and arrows around a phrase: translate the phrase, keep the decoration */
+  const m = s.match(/^([^\p{L}\p{N}"“«(¿¡]*)([\s\S]*?)([^\p{L}\p{N}"”»).?!…]*)$/u);
+  if (m && (m[1] || m[3]) && m[2]){ const inner = trCore(m[2], depth + 1); if (inner !== m[2]) return m[1] + inner + m[3]; }
+  return s;
+}
+function T(s){
+  if (!I18N || s == null) return s;
+  s = String(s);
+  const m = s.match(/^(\s*)([\s\S]*?)(\s*)$/), core = m[2];
+  if (!core || !/\p{L}/u.test(core)) return s;
+  let out = TR_CACHE.get(core);
+  if (out === undefined){ out = trCore(core, 0); if (TR_CACHE.size > 5000) TR_CACHE.clear(); TR_CACHE.set(core, out); }
+  return out === core ? s : m[1] + out + m[3];
+}
+/* captions, places, names and anything typed by people stay as written */
+const TR_SKIP = ".cap, [data-notr], script, style, textarea, input";
+const TR_ATTRS = ["placeholder", "aria-label", "title", "alt"];
+function trAttrs(el){
+  for (const a of TR_ATTRS){ const v = el.getAttribute(a); if (v){ const t = T(v); if (t !== v) el.setAttribute(a, t); } }
+}
+function trNode(n){
+  if (!I18N || !n) return;
+  if (n.nodeType === 3){
+    const p = n.parentElement; if (!p || p.closest(TR_SKIP)) return;
+    const v = n.nodeValue, t = T(v); if (t !== v) n.nodeValue = t; return;
+  }
+  if (n.nodeType !== 1) return;
+  if (n.closest(TR_SKIP)){ if (n.matches("input, textarea") && !n.closest(".cap, [data-notr]")) trAttrs(n); return; }
+  trAttrs(n);
+  const w = document.createTreeWalker(n, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {acceptNode: x => { if (x.nodeType !== 1) return NodeFilter.FILTER_ACCEPT; if (x.matches(".cap, [data-notr], script, style")) return NodeFilter.FILTER_REJECT; if (x.matches("textarea")){ trAttrs(x); return NodeFilter.FILTER_REJECT; } return NodeFilter.FILTER_ACCEPT; }});
+  while (w.nextNode()){
+    const x = w.currentNode;
+    if (x.nodeType === 3){ const v = x.nodeValue, t = T(v); if (t !== v) x.nodeValue = t; }
+    else trAttrs(x);
+  }
+}
+function trWatch(){
+  if (!I18N) return;
+  trNode(document.body);
+  new MutationObserver(recs => {
+    for (const r of recs){
+      if (r.type === "childList") r.addedNodes.forEach(trNode);
+      else if (r.type === "characterData") trNode(r.target);
+      else if (r.type === "attributes" && r.target.nodeType === 1 && !r.target.closest(".cap, [data-notr]")){ const v = r.target.getAttribute(r.attributeName); if (v){ const t = T(v); if (t !== v) r.target.setAttribute(r.attributeName, t); } }
+    }
+  }).observe(document.body, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:TR_ATTRS});
+}
+function setLang(l){
+  if (!LANGS.some(([k]) => k === l)) return;
+  try { localStorage.setItem("opp-lang", l); } catch(e) {}
+  if (l !== LANG) location.reload();
+}
+/* the language buttons: names stay in their own language */
+function langPicker(cls){
+  return '<div class="seg lang-seg '+(cls || '')+'" role="radiogroup" aria-label="'+esc(T("Language"))+'" data-notr>'+LANGS.map(([k, n]) => '<button type="button" role="radio" data-act="lang" data-id="'+k+'" aria-checked="'+(k === LANG)+'" aria-selected="'+(k === LANG)+'" lang="'+(k === "zh" ? "zh-Hans" : k)+'">'+n+'</button>').join("")+'</div>';
+}
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest('[data-act="lang"]'); if (b){ e.preventDefault(); e.stopPropagation(); setLang(b.dataset.id); } }, true);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hue = str => { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 360; };
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -1579,7 +1673,7 @@ function viewAuth(){
    + '<button class="btn primary" type="submit"'+(authBusy ? ' disabled' : '')+'>'+(authBusy ? 'One moment…' : forgot ? 'Send reset link' : up ? 'Create account' : 'Sign in')+'</button>'
    + '<p class="auth-switch">'+(forgot ? '<a href="#" data-act="auth-view" data-id="signin">Back to sign in</a>'
        : up ? 'Already have an account? <a href="#" data-act="auth-view" data-id="signin">Sign in</a>'
-       : 'New here? <a href="#" data-act="auth-view" data-id="signup">Create an account</a> · <a href="#" data-act="auth-view" data-id="forgot">Forgot password?</a>')+'</p></form></div>';
+       : 'New here? <a href="#" data-act="auth-view" data-id="signup">Create an account</a> · <a href="#" data-act="auth-view" data-id="forgot">Forgot password?</a>')+'</p></form><div class="auth-lang">'+langPicker()+'</div></div>';
 }
 async function submitAuth(){
   const email = ($("#a-email").value || "").trim(), passEl = $("#a-pass"), pass = passEl ? passEl.value : "";
@@ -1635,6 +1729,7 @@ function viewSettings(){
   let h = '<div class="stack">';
   if (typeof notifHTML === "function") h += notifHTML();
   h += groupsHTML();
+  h += '<div class="section-h"><h2>Language</h2></div><section class="guide set-lang"><p class="hint">Choose the language for the app on this phone. Captions, places and names stay as people wrote them.</p>'+langPicker()+'</section>';
   h += '<div class="section-h"><h2>Your account</h2></div><section class="guide set-acc">'
     + '<div class="set-row">'+avatar(me)+'<span class="t"><b>'+esc(nameOf(me))+'</b><small>'+esc(myEmail)+'</small></span></div>'
     + '<p class="hint">Change your name and profile photo at the top of your Passport.</p>'
@@ -1791,6 +1886,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------- Year in review ("Wrapped") ----------
    A full-screen story of someone's year on a plate: tap the right side for the next card, the left to go back. */
 const WR_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const WR_MINI = WR_MONTHS.map(m => m[0]);
 const yearsFor = uid => Array.from(new Set(mealsOf(uid).filter(m => !m.pending && m.date).map(m => +m.date.slice(0, 4)))).sort((a, b) => b - a);
 function wrapStats(uid, year){
   const all = mealsOf(uid).filter(m => !m.pending), ms = all.filter(m => m.date && +m.date.slice(0, 4) === year)
@@ -1863,7 +1959,7 @@ function wrapSlides(s){
   if (s.loved && s.lovedCount > 0) out.push(["g7", '<p class="wr-kicker">The group\'s favourite</p><div class="wr-photo">'+photoHTML(s.loved, true)+'</div><h2>'+esc(dishName(s.loved))+'</h2><p class="wr-sub">❤️ '+s.lovedCount+' like'+(s.lovedCount === 1 ? '' : 's')+'</p>']);
   const maxM = Math.max(...s.byMonth);
   out.push(["g8", '<p class="wr-kicker">'+(s.uid === me ? 'Your' : esc(shortName(s.uid))+'\'s')+' hungriest month</p><h1>'+WR_MONTHS[s.busiest]+'</h1>'
-    + '<div class="wr-bars">'+s.byMonth.map((n, i) => '<span class="'+(i === s.busiest ? 'top' : '')+'" style="--h:'+(maxM ? Math.max(4, n / maxM * 100) : 4)+'%;--i:'+i+'"><i></i><b>'+WR_MONTHS[i][0]+'</b></span>').join("")+'</div>'
+    + '<div class="wr-bars">'+s.byMonth.map((n, i) => '<span class="'+(i === s.busiest ? 'top' : '')+'" style="--h:'+(maxM ? Math.max(4, n / maxM * 100) : 4)+'%;--i:'+i+'"><i></i><b>'+WR_MINI[i]+'</b></span>').join("")+'</div>'
     + '<p class="wr-sub">'+s.byMonth[s.busiest]+' meal'+(s.byMonth[s.busiest] === 1 ? '' : 's')+'</p>']);
   /* prices are only compared within one currency: the one used most this year */
   const byCur = {}; s.priced.forEach(m => (byCur[m.price.cur] = byCur[m.price.cur] || []).push(m));
@@ -2066,7 +2162,7 @@ const _openEditorSw = openEditor;
 openEditor = function(){ const r = _openEditorSw.apply(this, arguments); swMark(); return r; };
 function swComposerDirty(){
   const h = document.querySelector("#sheet .sheet-h h2");
-  if (!K || K._sig === undefined || !h || !/^(Log a meal|Edit meal)$/.test(h.textContent)) return false;
+  if (!K || K._sig === undefined || !h || !document.querySelector('#sheet [data-act="post-meal"]')) return false;
   return swSig() !== K._sig || K.thumb !== K._thumb || K.srcImg !== K._src;
 }
 function swAskDiscard(){
@@ -2311,16 +2407,16 @@ function announceMeal(m, wasNew){
   if (!m || !m.id) return;
   const c = C[m.country] || {name:"", flag:""}, who = nameOf(me).split(" ")[0] || "A friend";
   const verb = m.dish && isDrink(m.dish) ? "drank" : "had";
-  const title = m.dish && D[m.dish] ? who+" "+verb+" "+D[m.dish].name+" "+c.flag : who+" logged a meal in "+c.name+" "+c.flag;
-  const body = (m.dish && D[m.dish] ? (m.place ? "At "+m.place+", "+c.name : "In "+c.name) : (m.custom || "A meal")+(m.place ? " at "+m.place : ""))+(m.caption ? ' · "'+m.caption.slice(0, 80)+'"' : "");
+  const title = m.dish && D[m.dish] ? who+" "+verb+" "+(D[m.dish].en || D[m.dish].name)+" "+c.flag : who+" logged a meal in "+(c.en || c.name)+" "+c.flag;
+  const body = (m.dish && D[m.dish] ? (m.place ? "At "+m.place+", "+(c.en || c.name) : "In "+(c.en || c.name)) : (m.custom || "A meal")+(m.place ? " at "+m.place : ""))+(m.caption ? ' · "'+m.caption.slice(0, 80)+'"' : "");
   const t = triedMap(me), done = m.dish && wasNew && c.dishes && c.dishes.every(d => t[d.id]);
-  if (done) notifyGroup({type:"done", meal_id:m.id, title:who+" completed "+c.name+"! "+c.flag, body:"All "+c.dishes.length+" must-trys, finishing with "+D[m.dish].name+".", alt:{title, body}});
+  if (done) notifyGroup({type:"done", meal_id:m.id, title:who+" completed "+(c.en || c.name)+"! "+c.flag, body:"All "+c.dishes.length+" must-trys, finishing with "+(D[m.dish].en || D[m.dish].name)+".", alt:{title, body}});
   else notifyGroup({type:"meal", meal_id:m.id, title, body});
 }
 function announceLike(m){
   if (!m || m.uid === me) return;
   const c = C[m.country] || {flag:""}, who = nameOf(me).split(" ")[0] || "A friend";
-  notifyGroup({type:"like", meal_id:m.id, title:who+" liked your "+dishName(m)+" "+c.flag, body:m.caption ? '"'+m.caption.slice(0, 90)+'"' : "Open Plate Passport to see it."});
+  notifyGroup({type:"like", meal_id:m.id, title:who+" liked your "+(m.dish && D[m.dish] ? (D[m.dish].en || D[m.dish].name) : (m.custom || "Meal"))+" "+c.flag, body:m.caption ? '"'+m.caption.slice(0, 90)+'"' : "Open Plate Passport to see it."});
 }
 /* opening the app from a notification shows that meal */
 function openMealFromLink(url){
@@ -2482,8 +2578,8 @@ function renderExploreResults(){
      + '</div>'; }).join("");
     return;
   }
-  const cs = COUNTRIES.filter(c => inSel(c.code) && c.name.toLowerCase().includes(q));
-  const ds = Object.values(D).filter(d => inSel(d.country) && (d.name.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q)));
+  const cs = COUNTRIES.filter(c => inSel(c.code) && (c.name.toLowerCase().includes(q) || (c.en || "").toLowerCase().includes(q)));
+  const ds = Object.values(D).filter(d => inSel(d.country) && (d.name.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q) || (d.en || "").toLowerCase().includes(q)));
   let h = "";
   if (cs.length) h += '<div class="d-list">'+cs.map(c => '<button class="d-row" data-act="country" data-id="'+c.code+'"><span class="em">'+c.flag+'</span><span class="t"><b>'+esc(c.name)+'</b><small>'+c.dishes.length+' must-try dishes</small></span></button>').join("")+'</div>';
   if (ds.length) h += '<div class="d-list">'+ds.map(d => dishRow(d, mine)).join("")+'</div>';
@@ -3232,6 +3328,22 @@ document.addEventListener("keydown", e => {
     if (sib && sib.tagName === "BUTTON") sib.focus(); else if (e.key === "ArrowUp") $("#mq").focus();
   } if (e.key === "Escape" && !$("#sheet-wrap").hidden) closeSheet(); });
 
+/* names in the chosen language, so lists, search and the share image use them */
+(function localizeData(){
+  if (!I18N) return;
+  const x = I18N.extra || {};
+  COUNTRIES.forEach(c => { c.en = c.name; c.name = T(c.name); });
+  Object.values(D).forEach(d => { d.en = d.name; d.name = T(d.name); d.desc = T(d.desc); if (d.region) d.region = T(d.region); });
+  COUNTRIES.sort((a, b) => a.name.localeCompare(b.name, LANG === "zh" ? "zh-Hans-u-co-pinyin" : LANG));
+  STAMPS.forEach(st => { st.name = T(st.name); st.desc = T(st.desc); });
+  if (x.months) WR_MONTHS.splice(0, 12, ...x.months);
+  if (x.monthsMini) WR_MINI.splice(0, 12, ...x.monthsMini);
+  /* the year-in-review share picture is drawn on a canvas, so its words go through the translator too */
+  const P = CanvasRenderingContext2D.prototype, ft = P.fillText, mt = P.measureText;
+  P.fillText = function(t, ...a){ return ft.call(this, T(String(t)), ...a); };
+  P.measureText = function(t){ return mt.call(this, T(String(t))); };
+})();
+trWatch();
 connect();
 render();
 })();
