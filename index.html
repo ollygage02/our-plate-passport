@@ -767,6 +767,18 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .av-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(10,14,12,.5);pointer-events:none}
 .av-crop .crop-hint{bottom:10px}
 .fx{font-size:12.5px;color:var(--muted);text-align:right;margin:-2px 0 8px}
+.ptr{position:fixed;left:50%;z-index:4;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(20,30,25,.16);display:grid;place-items:center;color:var(--muted);opacity:0;pointer-events:none;transform:translateY(-44px)}
+.ptr svg{width:18px;height:18px;transition:transform .2s}
+.ptr.ready{color:var(--accent)}
+.ptr.ready svg{transform:rotate(180deg)}
+.ptr.busy svg{display:none}
+.ptr.busy::after{content:"";width:16px;height:16px;box-sizing:border-box;border-radius:50%;border:2.2px solid var(--line);border-top-color:var(--accent);animation:boot-spin .75s linear infinite}
+.post .photo,.post .car{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.dt-heart{position:fixed;z-index:30;width:92px;height:92px;margin:-46px 0 0 -46px;pointer-events:none;color:#fff;filter:drop-shadow(0 4px 14px rgba(0,0,0,.35));animation:dt-pop .85s cubic-bezier(.2,.8,.3,1) forwards}
+.dt-heart svg{width:100%;height:100%;fill:currentColor;stroke:none}
+@keyframes dt-pop{0%{transform:scale(.2);opacity:0}15%{transform:scale(1.18);opacity:1}30%{transform:scale(.94)}45%{transform:scale(1)}75%{transform:scale(1);opacity:1}100%{transform:scale(.92) translateY(-16px);opacity:0}}
+@keyframes dt-fade{0%,70%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.dt-heart{animation:dt-fade .8s forwards}}
 .fx-in{margin-left:.3em;white-space:nowrap}
 .c-fx{text-align:left;margin:-6px 0 0}
 .car{position:relative}
@@ -3537,6 +3549,98 @@ async function postMeal(){
   if (ok === "queued") toast("No signal, so it's saved on your phone. It'll upload by itself when you're back online.");
   else toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
 }
+
+/* ---------- Pull down to refresh ----------
+   At the top of a page, drag down and let go to fetch the latest meals, likes and profiles (and check for a
+   new version of the app). Not over the map, the photo framer or a text box, and not while a sheet is open. */
+const PTR_GO = 62, PTR_MAX = 120, PTR_HOLD = 52;
+let PTR = null, ptrBusy = false;
+function ptrEl(){
+  let el = document.getElementById("ptr");
+  if (!el){
+    el = document.createElement("div"); el.id = "ptr"; el.className = "ptr"; el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function ptrCan(t){
+  if (mode !== "shared" || ptrBusy || window.scrollY > 0) return false;
+  if (swSheetOpen() || document.getElementById("wrap") || document.getElementById("avz")) return false;
+  return !!(t && t.closest) && !t.closest("input, textarea, select, [contenteditable], .cropper, svg.world, .tabs, #sheet-wrap, .upd, #toast");
+}
+function ptrPaint(d, anim){
+  const v = $("#view"), el = ptrEl(), bar = $("#bar"), top = bar ? bar.getBoundingClientRect().bottom : 0;
+  v.style.transition = el.style.transition = anim ? "transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s" : "none";
+  v.style.transform = d > 0 ? "translateY(" + d + "px)" : "";
+  el.style.top = top + "px";
+  el.style.transform = "translateY(" + (d > 0 ? d / 2 - 18 : -44) + "px)";
+  el.style.opacity = d > 0 ? (ptrBusy ? 1 : Math.min(1, d / PTR_GO)) : 0;
+  el.classList.toggle("ready", d >= PTR_GO);
+}
+function ptrRest(){ ptrPaint(0, true); const el = ptrEl(); setTimeout(() => { if (!ptrBusy){ el.classList.remove("busy"); $("#view").style.transition = ""; } }, 300); }
+async function ptrRun(){
+  ptrBusy = true; const el = ptrEl(), t0 = Date.now();
+  el.classList.add("busy"); ptrPaint(PTR_HOLD, true);
+  try {
+    if (navigator.onLine === false) toast("You're offline. Showing what's saved on this phone.");
+    else { flushOutbox(); await Promise.race([refresh(), new Promise(r => setTimeout(r, 12000))]); }
+    if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
+  } catch(e) {}
+  const wait = 650 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  ptrBusy = false; ptrRest();
+}
+document.addEventListener("touchstart", e => {
+  PTR = null;
+  if (e.touches.length === 1 && ptrCan(e.target)) PTR = {x0:e.touches[0].clientX, y0:e.touches[0].clientY, d:0, on:false};
+}, {passive:true});
+document.addEventListener("touchmove", e => {
+  if (!PTR) return;
+  if (e.touches.length !== 1 || (SW && SW.dir)){ if (PTR.on) ptrRest(); PTR = null; return; }
+  const dx = e.touches[0].clientX - PTR.x0, dy = e.touches[0].clientY - PTR.y0;
+  if (!PTR.on){
+    if (dy <= 0 || Math.abs(dx) >= dy){ if (Math.abs(dx) > 8 || dy < -4) PTR = null; return; }
+    if (window.scrollY > 0){ PTR = null; return; }
+    if (e.cancelable) e.preventDefault();   /* stop the page bouncing (and Chrome's own reload) */
+    if (dy < 8) return;
+    PTR.on = true;
+  }
+  if (e.cancelable) e.preventDefault();
+  const x = dy - 8, d = PTR_MAX * (1 - 1 / (x * 0.55 / PTR_MAX + 1));   /* gets harder to pull the further you go */
+  if (d >= PTR_GO && PTR.d < PTR_GO && navigator.vibrate) try { navigator.vibrate(8); } catch(err) {}
+  PTR.d = d; ptrPaint(d, false);
+}, {passive:false});
+document.addEventListener("touchend", () => { if (!PTR) return; const p = PTR; PTR = null; if (!p.on) return; if (p.d >= PTR_GO) ptrRun(); else ptrRest(); });
+document.addEventListener("touchcancel", () => { if (PTR && PTR.on) ptrRest(); PTR = null; });
+
+/* ---------- Double-tap a photo to like it ----------
+   Like Instagram: two quick taps on a post's photo like it (never unlike) and a heart pops up over the photo.
+   A single tap still opens the dish page, a moment later, once it's clear a second tap isn't coming. */
+let DT = null, dtPass = false;
+function dtHeart(box){
+  const r = box.getBoundingClientRect(), h = document.createElement("span");
+  h.className = "dt-heart"; h.setAttribute("aria-hidden", "true"); h.innerHTML = I.heart;
+  h.style.left = (r.left + r.width / 2) + "px"; h.style.top = (r.top + Math.min(r.height, innerHeight - r.top) / 2) + "px";
+  document.body.appendChild(h); setTimeout(() => h.remove(), 900);
+}
+document.addEventListener("click", e => {
+  if (dtPass || !e.target.closest || e.detail === 0) return;   /* keyboard presses go straight through */
+  const ph = e.target.closest(".post .photo, .post .car");
+  if (!ph || e.target.closest(".car-arr")) return;
+  const post = ph.closest(".post"), lb = post.querySelector('[data-act="like"]'), link = ph.closest('[data-act="dish"]');
+  if (!lb) return;
+  e.preventDefault(); e.stopPropagation();
+  if (DT && DT.post === post && e.timeStamp - DT.t < 350){
+    clearTimeout(DT.timer); DT = null;
+    const m = findMeal(lb.dataset.id); if (!m || m.pending || !canWrite()) return;
+    dtHeart(ph.closest(".car") || ph);
+    if (navigator.vibrate) try { navigator.vibrate(8); } catch(err) {}
+    if (!(m.likes && m.likes[me])) toggleLike(m);
+    return;
+  }
+  const id = link && link.dataset.id;
+  DT = {post, t:e.timeStamp, timer:setTimeout(() => { DT = null; if (id){ closeSheet(); go({v:"dish", id}); } }, 300)};
+}, true);
 
 /* ---------- Events ---------- */
 document.addEventListener("click", e => {
