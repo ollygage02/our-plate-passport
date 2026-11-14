@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=3"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=4"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -748,6 +748,9 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
 .lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
+.av-crop{aspect-ratio:1/1;max-width:min(100%,320px)}
+.av-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(10,14,12,.5);pointer-events:none}
+.av-crop .crop-hint{bottom:10px}
 .fx{font-size:12.5px;color:var(--muted);text-align:right;margin:-2px 0 8px}
 .c-fx{text-align:left;margin:-6px 0 0}
 .car{position:relative}
@@ -2514,6 +2517,59 @@ async function loadImg(file){
 const photoError = err => toast(err && err.message === "heic-lib" ? "The HEIC converter couldn't load. Try again, or export the photo as a JPG." : "That photo couldn't be read. Try a JPG, PNG or HEIC.");
 function drawTo(img, max){ const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)); const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth*s); cv.height = Math.round(img.naturalHeight*s); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); return cv; }
 /* profile photos: square-cropped, small, stored with the person (no location data survives the re-encode) */
+/* ---------- Profile picture framing: a circle you drag, pinch or zoom, like framing a meal photo ---------- */
+let AV = null;
+async function openAvatarCrop(file){
+  const {img} = await loadImg(file);
+  AV = {img, z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2, busy:false};
+  openSheet('<div class="sheet-h"><h2>Profile picture</h2><button class="icon-btn" data-act="close" aria-label="Close">'+I.close+'</button></div><div class="stack">'
+    + '<div class="cropper av-crop"><canvas id="av-cv" aria-label="Photo preview. Drag to choose which part shows."></canvas><span class="av-ring" aria-hidden="true"></span><span class="crop-hint">Drag to position · pinch or slide to zoom</span></div>'
+    + '<div class="crop-ctrl"><label class="label" for="av-z">Zoom</label><input id="av-z" type="range" min="1" max="4" step="0.01" value="1"></div>'
+    + '<div class="row-btns"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="av-save" id="av-save">Save</button></div></div>');
+  avSetup();
+}
+function avRect(){
+  const W = AV.img.naturalWidth, H = AV.img.naturalHeight, c = Math.min(W, H) / AV.z;
+  AV.cx = Math.min(W - c / 2, Math.max(c / 2, AV.cx)); AV.cy = Math.min(H - c / 2, Math.max(c / 2, AV.cy));
+  return {x:AV.cx - c / 2, y:AV.cy - c / 2, w:c, h:c};
+}
+function avDraw(){
+  const cv = $("#av-cv"); if (!cv || !AV) return;
+  const r = avRect(), px = Math.round((cv.clientWidth || 300) * Math.min(2, window.devicePixelRatio || 1));
+  if (cv.width !== px){ cv.width = cv.height = px; }
+  cv.getContext("2d").drawImage(AV.img, r.x, r.y, r.w, r.h, 0, 0, px, px);
+}
+function avSetup(){
+  const cv = $("#av-cv"); if (!cv) return;
+  avDraw();
+  const zoomBy = f => { AV.z = Math.min(4, Math.max(1, AV.z * f)); const zi = $("#av-z"); if (zi) zi.value = AV.z; avDraw(); };
+  const pts = new Map();
+  cv.addEventListener("pointerdown", e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); try { cv.setPointerCapture(e.pointerId); } catch(err) {} });
+  cv.addEventListener("pointermove", e => {
+    const prev = pts.get(e.pointerId); if (!prev || !AV) return;
+    const now = {x:e.clientX, y:e.clientY};
+    if (pts.size >= 2){
+      const other = Array.from(pts.entries()).find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(now.x - other.x, now.y - other.y);
+      if (d0 > 0) zoomBy(Math.pow(d1 / d0, PINCH_GAIN));
+    } else { const k = avRect().w / (cv.clientWidth || 1); AV.cx -= (now.x - prev.x) * k; AV.cy -= (now.y - prev.y) * k; avDraw(); }
+    pts.set(e.pointerId, now);
+  });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(t => cv.addEventListener(t, e => pts.delete(e.pointerId)));
+  cv.addEventListener("wheel", e => { e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0035)); }, {passive:false});
+}
+async function saveAvatarCrop(){
+  if (!AV || AV.busy) return;
+  AV.busy = true; const b = $("#av-save"); if (b){ b.disabled = true; b.textContent = "Saving…"; }
+  const r = avRect(), cv = document.createElement("canvas"); cv.width = cv.height = 320;   /* re-encoding drops EXIF, including GPS */
+  cv.getContext("2d").drawImage(AV.img, r.x, r.y, r.w, r.h, 0, 0, 320, 320);
+  const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.86));
+  const ok = await setAvatar(blob);
+  if (ok){ AV = null; closeSheet(); toast("Profile picture updated."); }
+  else { AV.busy = false; if (b){ b.disabled = false; b.textContent = "Save"; } }
+}
+document.addEventListener("input", e => { if (e.target && e.target.id === "av-z" && AV){ AV.z = +e.target.value; avDraw(); } });
+document.addEventListener("click", e => { if (e.target.closest && e.target.closest('[data-act="av-save"]')) saveAvatarCrop(); });
 async function squarePhoto(file){
   const {img, url} = await loadImg(file);
   const s = Math.min(img.naturalWidth, img.naturalHeight), cv = document.createElement("canvas"); cv.width = cv.height = 192;
@@ -3477,8 +3533,8 @@ document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "c-file" && t.files && t.files.length){ const fs = Array.from(t.files); t.value = ""; await addFiles(fs); }
   else if (t.id === "pp-file" && t.files && t.files[0]){
-    try { const blob = await squarePhoto(t.files[0]); if (await setAvatar(blob)) toast("Profile picture updated."); }
-    catch(err){ photoError(err); }
+    const f = t.files[0]; t.value = "";
+    try { await openAvatarCrop(f); } catch(err){ photoError(err); }
   }
   else if (t.id === "c-country"){ K.country = t.value; K.dish = ""; if (!K.curManual) K.cur = CUR[K.country] || "EUR"; renderComposer(); }
   else if (t.id === "c-cur"){ K.cur = t.value; K.curManual = true; fxComposer(); }
