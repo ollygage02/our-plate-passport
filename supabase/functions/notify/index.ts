@@ -1,5 +1,6 @@
 // Sends web push notifications to the group.
-// Called by the app (with the signed-in person's token) after they post a meal or like one.
+// Called by the app (with the signed-in person's token) after they post a meal or like one,
+// and after they report a post or profile (that one goes to the group's admins).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -41,6 +42,7 @@ Deno.serve(async (req) => {
   let input: Record<string, unknown>;
   try { input = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
   const type = String(input.type);
+  if (type === "report") return await reportToAdmins(admin, caller.id, callerEmail, gm ?? [], String(input.report_id ?? ""));
   const mealId = String(input.meal_id ?? "");
   const main: Msg = { title: clip(input.title, 80), body: clip(input.body, 180) };
   const alt = input.alt && typeof input.alt === "object" ? { title: clip((input.alt as Msg).title, 80), body: clip((input.alt as Msg).body, 180) } : null;
@@ -104,3 +106,50 @@ Deno.serve(async (req) => {
   if (gone.length) await admin.from("push_subscriptions").delete().in("endpoint", gone);
   return json({ sent, removed: gone.length });
 });
+
+// A report goes to the admins of the groups that both the reporter and the reported person are in (never to the
+// reported person). The wording is made here from the database, not taken from the app.
+// deno-lint-ignore no-explicit-any
+async function reportToAdmins(admin: any, callerId: string, callerEmail: string, gm: { group_id: string; email: string; role?: string }[], reportId: string) {
+  if (!reportId) return json({ error: "Bad request" }, 400);
+  const { data: rep } = await admin.from("reports").select("id,reporter,target_user,kind,status").eq("id", reportId).maybeSingle();
+  if (!rep || rep.reporter !== callerId) return json({ error: "Report not found" }, 404);
+  if (rep.status !== "open") return json({ sent: 0 });
+
+  const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const users = list?.users ?? [];
+  const emailOf = (id: string) => String(users.find((u: { id: string }) => u.id === id)?.email ?? "").toLowerCase();
+  const targetEmail = emailOf(rep.target_user);
+  const { data: roles } = await admin.from("group_members").select("group_id,email,role");
+  const rows = (roles ?? gm) as { group_id: string; email: string; role?: string }[];
+  const both = new Set(rows.filter((r) => r.email === callerEmail).map((r) => r.group_id)
+    .filter((g) => rows.some((r) => r.group_id === g && r.email === targetEmail)));
+  const adminEmails = new Set(rows.filter((r) => both.has(r.group_id) && r.role === "admin" && r.email !== targetEmail && r.email !== callerEmail).map((r) => r.email));
+  const to = users.filter((u: { email?: string }) => adminEmails.has(String(u.email).toLowerCase())).map((u: { id: string }) => u.id);
+  if (!to.length) return json({ sent: 0 });
+
+  const { data: people } = await admin.from("profiles").select("id,nick").in("id", [callerId, rep.target_user]);
+  const nick = (id: string) => String((people ?? []).find((p: { id: string }) => p.id === id)?.nick || "").trim() || "Someone";
+  const msg = {
+    title: "Something to review",
+    body: nick(callerId) + " reported " + (rep.kind === "meal" ? "a post by " + nick(rep.target_user) : nick(rep.target_user) + "'s profile") + ". Tap to review it.",
+  };
+  const { data: cfg } = await admin.from("push_config").select("*").eq("id", 1).single();
+  webpush.setVapidDetails(cfg.subject, cfg.vapid_public, cfg.vapid_private);
+  const { data: subs } = await admin.from("push_subscriptions").select("*").in("user_id", to);
+  let sent = 0;
+  const gone: string[] = [];
+  await Promise.all((subs ?? []).map(async (s: { endpoint: string; p256dh: string; auth: string }) => {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: msg.title, body: msg.body, url: "/?review=1", tag: "report-" + rep.id }), { TTL: 60 * 60 * 24 * 3 });
+      sent++;
+    } catch (e) {
+      const code = (e as { statusCode?: number }).statusCode;
+      if (code === 404 || code === 410) gone.push(s.endpoint);
+      else console.error("push failed", code, String(e).slice(0, 200));
+    }
+  }));
+  if (gone.length) await admin.from("push_subscriptions").delete().in("endpoint", gone);
+  return json({ sent, removed: gone.length });
+}

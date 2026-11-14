@@ -363,3 +363,109 @@ alter table public.profiles add constraint profiles_home_currency_code check (ho
 alter table public.profiles add column if not exists bio text not null default '';
 alter table public.profiles drop constraint if exists profiles_bio_length;
 alter table public.profiles add constraint profiles_bio_length check (char_length(bio) <= 150);
+
+-- ---------- Reporting posts and profiles; admins can remove what's reported ----------
+-- "Is the signed-in person an admin of a group this person is in?" (never true about yourself)
+create or replace function public.is_admin_over(uid uuid) returns boolean
+language sql stable security definer set search_path = public, auth as $$
+  select uid is not null and uid <> auth.uid() and exists (
+    select 1 from public.group_members mine
+    join public.group_members theirs on theirs.group_id = mine.group_id
+    join auth.users u on lower(u.email) = theirs.email
+    where mine.email = public.my_email() and mine.role = 'admin' and u.id = uid);
+$$;
+-- the same, for a photo's folder name (each person's photos live in a folder named after their account id)
+create or replace function public.is_admin_over_folder(folder text) returns boolean
+language sql stable security definer set search_path = public, auth as $$
+  select exists (
+    select 1 from public.group_members mine
+    join public.group_members theirs on theirs.group_id = mine.group_id
+    join auth.users u on lower(u.email) = theirs.email
+    where mine.email = public.my_email() and mine.role = 'admin' and u.id::text = folder and u.id <> auth.uid());
+$$;
+
+create table if not exists public.reports (
+  id           uuid primary key default gen_random_uuid(),
+  reporter     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  target_user  uuid not null references auth.users (id) on delete cascade,
+  meal_id      uuid references public.meals (id) on delete set null,
+  kind         text not null check (kind in ('meal','profile')),
+  reason       text not null check (reason in ('explicit','offensive','spam','other')),
+  note         text not null default '' check (char_length(note) <= 300),
+  status       text not null default 'open' check (status in ('open','dismissed','removed')),
+  created_at   timestamptz not null default now(),
+  handled_by   uuid references auth.users (id) on delete set null,
+  handled_at   timestamptz
+);
+create index if not exists reports_target_idx on public.reports (target_user);
+create index if not exists reports_meal_idx on public.reports (meal_id);
+-- one open report per person per post or profile
+create unique index if not exists reports_once on public.reports (reporter, kind, target_user, coalesce(meal_id, '00000000-0000-0000-0000-000000000000'::uuid)) where status = 'open';
+
+-- admins can only change a report's status; who handled it and when is filled in here
+create or replace function public.report_handled() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.reporter <> old.reporter or new.target_user <> old.target_user or new.kind <> old.kind or new.reason <> old.reason
+     or new.note <> old.note or new.created_at <> old.created_at or (new.meal_id is distinct from old.meal_id and new.meal_id is not null) then
+    raise exception 'Only the status of a report can change';
+  end if;
+  if new.status is distinct from old.status then new.handled_by := auth.uid(); new.handled_at := now(); end if;
+  return new;
+end;
+$$;
+drop trigger if exists report_handled on public.reports;
+create trigger report_handled before update on public.reports for each row execute function public.report_handled();
+
+alter table public.reports enable row level security;
+drop policy if exists "report what you can see"     on public.reports;
+drop policy if exists "see your reports and ones you look after" on public.reports;
+drop policy if exists "admins handle reports"       on public.reports;
+drop policy if exists "take back your report"       on public.reports;
+create policy "report what you can see" on public.reports for insert with check (
+  reporter = auth.uid() and status = 'open' and handled_by is null and handled_at is null
+  and target_user <> auth.uid() and public.shares_group(target_user)
+  and ((kind = 'meal' and meal_id is not null and exists (select 1 from public.meals m where m.id = meal_id and m.user_id = target_user))
+    or (kind = 'profile' and meal_id is null)));
+create policy "see your reports and ones you look after" on public.reports for select using (reporter = auth.uid() or public.is_admin_over(target_user));
+create policy "admins handle reports" on public.reports for update using (public.is_admin_over(target_user)) with check (public.is_admin_over(target_user));
+create policy "take back your report" on public.reports for delete using (reporter = auth.uid() and status = 'open');
+
+-- admins can remove a group member's post, and its photo files
+drop policy if exists "admins remove posts" on public.meals;
+create policy "admins remove posts" on public.meals for delete using (public.is_admin_over(user_id));
+drop policy if exists "admins see member photo files" on storage.objects;
+drop policy if exists "admins remove member photos"   on storage.objects;
+create policy "admins see member photo files" on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and public.is_admin_over_folder((storage.foldername(name))[1]));
+create policy "admins remove member photos" on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and public.is_admin_over_folder((storage.foldername(name))[1]));
+
+-- admins can clear a member's profile photo, name and bio (returns the old photo's path so the app can delete the file)
+create or replace function public.admin_clear_profile(uid uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare old text;
+begin
+  if not public.is_admin_over(uid) then raise exception 'Only an admin of one of their groups can do this'; end if;
+  select photo_path into old from public.profiles where id = uid;
+  update public.profiles set photo_path = null, nick = '', bio = '' where id = uid;
+  update public.reports set status = 'removed' where target_user = uid and kind = 'profile' and status = 'open';
+  return old;
+end;
+$$;
+
+revoke execute on function public.report_handled() from public, anon, authenticated;
+revoke execute on function public.is_admin_over(uuid) from public, anon;
+revoke execute on function public.is_admin_over_folder(text) from public, anon;
+revoke execute on function public.admin_clear_profile(uuid) from public, anon;
+grant execute on function public.is_admin_over(uuid) to authenticated;
+grant execute on function public.is_admin_over_folder(text) to authenticated;
+grant execute on function public.admin_clear_profile(uuid) to authenticated;
+
+-- admins see new reports straight away
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'reports') then
+    alter publication supabase_realtime add table public.reports;
+  end if;
+end $$;

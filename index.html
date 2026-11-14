@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=9"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=10"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -767,6 +767,34 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .av-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(10,14,12,.5);pointer-events:none}
 .av-crop .crop-hint{bottom:10px}
 .fx{font-size:12.5px;color:var(--muted);text-align:right;margin:-2px 0 8px}
+.rep-wrap{position:relative;overflow:hidden}
+.rep-wrap .photo img,.rep-wrap .car{filter:blur(28px) saturate(.6);transform:scale(1.08)}
+.rep-cover{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;background:rgba(10,14,12,.35);color:#fff}
+.rep-cover b{font-size:15px}
+.rep-cover .btn{background:rgba(255,255,255,.94);color:#17201B;border-color:transparent}
+.post.reported .cap{filter:blur(5px);user-select:none}
+.tile.rep-tile img{filter:blur(14px)}
+.bar .bar-more{margin-left:auto}
+.rep-reasons{display:flex;flex-direction:column;gap:8px}
+.rep-r{text-align:left;padding:13px 14px;border:1.5px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font-weight:600}
+.rep-r[aria-checked=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--fg)}
+.rev-banner{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;border-radius:var(--r-md);background:var(--surface);background:color-mix(in srgb, var(--stamp) 11%, var(--surface));color:var(--stamp);font-weight:700;text-align:left;box-shadow:var(--shadow)}
+.rev-banner .t{flex:1}
+.rev-flag{font-size:16px}
+.set-rev{gap:12px}
+.rev-item{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.rev-item:first-of-type{border-top:0;padding-top:0}
+.rev-h{display:flex;align-items:center;gap:12px}
+.rev-h .t{display:flex;flex-direction:column;min-width:0}
+.rev-h small{color:var(--muted)}
+.rev-ph{width:56px;height:56px;border-radius:10px;overflow:hidden;flex:none}
+.rev-ph .photo{display:block;width:100%;height:100%}
+.rev-ph img{width:100%;height:100%;object-fit:cover;filter:blur(6px)}
+.rev-why{font-size:13.5px;color:var(--muted)}
+.rev-why b{color:var(--fg)}
+.rev-note{font-size:14px;font-style:italic}
+.rev-rm,.rev-go{color:var(--stamp)}
+.btn.primary.rev-go{background:var(--stamp);border-color:var(--stamp);color:#fff}
 .ptr{position:fixed;left:50%;z-index:4;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(20,30,25,.16);display:grid;place-items:center;color:var(--muted);opacity:0;pointer-events:none;transform:translateY(-44px)}
 .ptr svg{width:18px;height:18px;transition:transform .2s}
 .ptr.ready{color:var(--accent)}
@@ -1548,6 +1576,7 @@ async function startSession(session){
     .on("postgres_changes", {event:"*", schema:"public", table:"profiles"}, scheduleRefresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"groups"}, scheduleRefresh)
     .on("postgres_changes", {event:"*", schema:"public", table:"group_members"}, scheduleRefresh)
+    .on("postgres_changes", {event:"*", schema:"public", table:"reports"}, scheduleRefresh)
     .subscribe();
   if (!(PEOPLE[me] && PEOPLE[me].nick) && !askedNick){ askedNick = true; askNick(); }
   flushOutbox();
@@ -1557,14 +1586,15 @@ let refreshT = null;
 function scheduleRefresh(){ clearTimeout(refreshT); refreshT = setTimeout(refresh, 300); }
 async function refresh(first){
   if (mode !== "shared" && !first) return;
-  const [m, p, l, g, gm] = await Promise.all([
+  const [m, p, l, g, gm, rp] = await Promise.all([
     sb.from("meals").select("*").order("created_at", {ascending:false}).limit(3000),
     sb.from("profiles").select("*"),
     sb.from("likes").select("meal_id,user_id"),
     sb.from("groups").select("id,name,created_by,created_at"),
-    sb.from("group_members").select("group_id,email,role,added_at")]);
+    sb.from("group_members").select("group_id,email,role,added_at"),
+    sb.from("reports").select("id,reporter,target_user,meal_id,kind,reason,note,status,created_at")]);
   if (m.error || p.error){ if (first && mode === "connecting"){ mode = "shared"; render(); } toast("Couldn't load your group's meals. Check your connection and reload."); return; }
-  const rows = {m:m.data, p:p.data, l:l.data || [], g:g.error ? null : g.data, gm:gm.error ? null : gm.data};
+  const rows = {m:m.data, p:p.data, l:l.data || [], g:g.error ? null : g.data, gm:gm.error ? null : gm.data, r:rp && !rp.error ? rp.data || [] : []};
   const same = mode === "shared" && JSON.stringify(rows) === lastRowsJSON; lastRowsJSON = JSON.stringify(rows);
   if (same) return;   /* nothing changed since what's on screen: no redraw, no flicker */
   if (applyRows(rows)){ mode = "shared"; saveCache(rows); } else clearCache();
@@ -1585,6 +1615,7 @@ function applyRows(d){
   MEALS = d.m.map(r => ({id:r.id, uid:r.user_id, dish:r.dish, custom:r.custom || "", country:r.country, date:r.date, place:r.place || "", caption:r.caption || "",
     ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
     photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), photos:mealPhotos(r), likes:likes[r.id] || {}, created:r.created_at}));
+  REPORTS = Array.isArray(d.r) ? d.r : [];
   PEOPLE = {};
   d.p.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", bio:r.bio || "", notify:r.notify || null, home:r.home_currency || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path, email:(r.email || "").toLowerCase()}; });
   if (d.g && d.gm){
@@ -1807,6 +1838,7 @@ function groupsHTML(){
 /* ---------- Settings ---------- */
 function viewSettings(){
   let h = '<div class="stack">';
+  h += reviewHTML();
   h += profileHTML();
   if (typeof notifHTML === "function") h += notifHTML();
   h += groupsHTML();
@@ -2503,6 +2535,11 @@ function announceLike(m){
 /* opening the app from a notification shows that meal */
 function openMealFromLink(url){
   try {
+    if (new URL(url || location.href, location.origin).searchParams.get("review")){
+      closeSheet(); if (cur().v !== "settings") go({v:"settings"}); else render(); window.scrollTo(0, 0);
+      if (!url) history.replaceState(history.state, "", location.pathname);
+      return;
+    }
     const id = new URL(url || location.href, location.origin).searchParams.get("meal"); if (!id) return;
     const m = findMeal(id); if (m) openSheet(postCard(m));
     if (!url) history.replaceState(history.state, "", location.pathname);
@@ -2665,14 +2702,15 @@ function facesFor(dishId){
   return ids.length ? '<span class="faces">'+ids.map(id => avatar(id, "sm")).join("")+'</span>' : '';
 }
 function postCard(m){
-  const c = C[m.country] || {code:"", name:"", flag:""}, liked = !!(m.likes && m.likes[me]);
-  return '<article class="post">'
+  const c = C[m.country] || {code:"", name:"", flag:""}, liked = !!(m.likes && m.likes[me]), hid = repHidden(m.id);
+  return '<article class="post'+(hid ? ' reported' : '')+'">'
    + '<div class="post-h"><button class="who" data-act="user" data-id="'+esc(m.uid)+'">'+avatar(m.uid)+'<span class="who-t"><b>'+esc(nameOf(m.uid))+'</b><small>'+esc(m.place || fmtDate(m.date))+'</small></span></button>'
    + '<span class="cstamp" title="'+esc(c.name)+'">'+esc(c.code)+'</span>'
-   + (m.uid === me && canWrite() ? '<button class="icon-btn" data-act="menu" data-id="'+esc(m.id)+'" aria-label="More options">'+I.more+'</button>' : '') + '</div>'
-   + (m.photos && m.photos.length > 1
+   + (canWrite() && !(m.pending && m.uid !== me) ? '<button class="icon-btn" data-act="menu" data-id="'+esc(m.id)+'" aria-label="More options">'+I.more+'</button>' : '') + '</div>'
+   + (hid ? '<div class="rep-wrap">' : '') + (m.photos && m.photos.length > 1
        ? (m.dish && D[m.dish] ? '<div class="ph-link" data-act="dish" data-id="'+m.dish+'">'+carouselHTML(m)+'</div>' : carouselHTML(m))
        : (m.dish && D[m.dish] ? '<button style="display:block;width:100%" data-act="dish" data-id="'+m.dish+'">'+photoHTML(m, true)+'</button>' : photoHTML(m, true)))
+   + (hid ? '<div class="rep-cover"><b>You reported this post</b><button class="btn sm" data-act="rep-show" data-id="'+esc(m.id)+'">Show anyway</button></div></div>' : '')
    + '<div class="post-b"><div class="acts">'
    + '<button class="act'+(liked ? ' liked' : '')+'" data-act="like" data-id="'+esc(m.id)+'" aria-pressed="'+liked+'" aria-label="Like"'+(canWrite() ? '' : ' disabled')+'>'+I.heart+'<span class="mono">'+likeCount(m)+'</span></button>'
    + '<span class="date">'+(priceText(m.price) ? esc(priceText(m.price))+fxHTML(m.price, m.date)+' · ' : '')+fmtDate(m.date)+'</span></div>'
@@ -2705,7 +2743,8 @@ function render(){
   else if (r.v === "stamps"){ title = r.uid === me ? "Your stamps" : shortName(r.uid) + "'s stamps"; html = viewStamps(r.uid); }
   else if (r.v === "ucountry"){ title = shortName(r.uid) + " · " + C[r.id].name; html = viewUserCountry(r.uid, r.id); }
   const bar = $("#bar");
-  if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>';
+  if (stack.length > 1) bar.innerHTML = '<button class="icon-btn" data-act="back" aria-label="Back">'+I.back+'</button><h1>'+esc(title)+'</h1>'
+    + (r.v === "user" && r.id !== me && canWrite() && PEOPLE[r.id] ? '<button class="icon-btn bar-more" data-act="user-menu" data-id="'+esc(r.id)+'" aria-label="More options">'+I.more+'</button>' : '');
   else if (r.v === "feed") bar.innerHTML = '<span class="wordmark"><span class="wm-logo" aria-hidden="true"></span>Plate Passport</span>';
   else bar.innerHTML = '<h1 style="font-size:24px;font-weight:800;flex:1">'+esc(title)+'</h1>' + (r.v === "user" && r.id === me ? '<button class="icon-btn set-btn" data-act="settings" aria-label="Settings">'+I.gear+'</button>' : '');
   const ae = document.activeElement, keep = ae && (ae.id === "q" || ae.id === "mq") ? {id:ae.id, pos:ae.selectionStart} : null;
@@ -2721,7 +2760,7 @@ function render(){
 /* ---------- Views ---------- */
 function viewFeed(){
   const feed = MEALS.filter(m => inSel(m.uid)).sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.created || "").localeCompare(a.created || ""));
-  let h = '<div class="stack">' + statusLine() + groupPicker();
+  let h = '<div class="stack">' + statusLine() + reviewBanner() + groupPicker();
   if (mode !== "connecting" && feed.length === 0){
     h += '<div class="empty-state"><p><b style="color:var(--fg)">No meals yet.</b></p><p>Log the first one, and it shows up here for everyone you share this passport with.</p><button class="btn primary" data-act="log" data-id="">'+I.camera+'Log a meal</button></div>';
   }
@@ -3550,6 +3589,152 @@ async function postMeal(){
   else toast(wasNew ? "Stamped! " + D[m.dish].name + " is in your passport." : "Added to your passport.");
 }
 
+/* ---------- Reporting ----------
+   Anyone can report someone else's post or profile. The admins of the groups you share with them are told
+   (a notification, a note at the top of their feed, and a list at the top of Settings) and can remove the post,
+   clear the profile, or leave it. The reported person can't see reports. A post you reported is blurred for you. */
+let REPORTS = [], RP = null;
+const REP_SHOWN = new Set();   /* reported posts you chose to look at anyway, this visit only */
+const REP_REASONS = [["explicit", "Nudity or sexual content"], ["offensive", "Offensive, hateful or violent"], ["spam", "Spam, or not food"], ["other", "Something else"]];
+const repReasonText = k => (REP_REASONS.find(x => x[0] === k) || REP_REASONS[3])[1];
+const uidEmail = uid => (PEOPLE[uid] && PEOPLE[uid].email) || "";
+/* are you an admin of a group this person is in? (never about yourself) */
+function adminOver(uid){ const e = uidEmail(uid); return !!uid && uid !== me && !!e && GROUPS.some(g => amAdmin(g) && g.members.some(x => x.email === e)); }
+/* who'd look at a report about this person: admins of the groups you're both in, apart from them */
+function reviewersOf(uid){
+  const e = uidEmail(uid), out = new Set();
+  GROUPS.forEach(g => { if (g.members.some(x => x.email === e)) g.members.forEach(x => { if (x.role === "admin" && x.email !== e && x.email !== myEmail) out.add(x.email); }); });
+  return out;
+}
+const myMealReport = id => REPORTS.find(r => r.reporter === me && r.kind === "meal" && r.meal_id === id);
+const myProfileReport = uid => REPORTS.find(r => r.reporter === me && r.kind === "profile" && r.target_user === uid && r.status === "open");
+const repHidden = id => !!myMealReport(id) && !REP_SHOWN.has(id);
+const toReview = () => REPORTS.filter(r => r.status === "open" && adminOver(r.target_user)).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+
+function otherMenuHTML(m){
+  const mine = myMealReport(m.id);
+  let h = '<div class="menu">';
+  if (adminOver(m.uid)) h += '<button class="danger" data-act="rm-ask" data-id="'+esc(m.id)+'">Remove this post</button>';
+  else if (mine && mine.status === "open") h += '<button data-act="rep-undo" data-id="'+esc(mine.id)+'">Withdraw your report</button>';
+  else if (!mine) h += '<button class="danger" data-act="rep-open" data-kind="meal" data-id="'+esc(m.id)+'">Report this post</button>';
+  if (mine && REP_SHOWN.has(m.id)) h += '<button data-act="rep-hide" data-id="'+esc(m.id)+'">Hide this post again</button>';
+  return h + '<button data-act="close">Cancel</button></div>';
+}
+function userMenuHTML(uid){
+  const mine = myProfileReport(uid), n = shortName(uid);
+  let h = '<div class="menu">';
+  if (adminOver(uid)) h += '<button class="danger" data-act="clr-ask" data-id="'+esc(uid)+'">Clear '+esc(n)+'\'s photo, name and bio</button>';
+  else if (mine) h += '<button data-act="rep-undo" data-id="'+esc(mine.id)+'">Withdraw your report</button>';
+  else h += '<button class="danger" data-act="rep-open" data-kind="profile" data-id="'+esc(uid)+'">Report '+esc(n)+'\'s profile</button>';
+  return h + '<button data-act="close">Cancel</button></div>';
+}
+function openReport(kind, id){
+  const m = kind === "meal" ? findMeal(id) : null, uid = m ? m.uid : id;
+  if (!uid || uid === me || (kind === "meal" && !m)) return;
+  RP = {kind, id, uid, reason:null};
+  openSheet('<div class="stack rep-sheet"><h2 style="font-size:20px">'+(kind === "meal" ? 'Report this post' : 'Report this profile')+'</h2>'
+    + '<p class="hint">What\'s wrong with it?</p>'
+    + '<div class="rep-reasons" role="radiogroup" aria-label="Reason">'+REP_REASONS.map(([k, t]) => '<button type="button" class="rep-r" role="radio" aria-checked="false" data-act="rep-reason" data-id="'+k+'">'+t+'</button>').join("")+'</div>'
+    + '<div class="field"><label class="label" for="rep-note">Anything to add? (optional)</label><textarea id="rep-note" rows="2" maxlength="300"></textarea></div>'
+    + '<p class="hint"><span>Only your group\'s admins see reports, and who sent them.</span> <span>'+esc(shortName(uid))+' can\'t see reports.</span></p>'
+    + '<div class="row-btns"><button class="btn" data-act="close">Cancel</button><button class="btn primary" id="rep-send" data-act="rep-send" disabled>Send report</button></div></div>');
+}
+async function sendReport(){
+  if (!RP || !RP.reason) return;
+  const rp = RP, note = (($("#rep-note") || {}).value || "").trim().slice(0, 300), btn = $("#rep-send");
+  const row = {id:newId(), target_user:rp.uid, meal_id:rp.kind === "meal" ? rp.id : null, kind:rp.kind, reason:rp.reason, note};
+  if (btn){ btn.disabled = true; btn.textContent = "Sending…"; }
+  const {error} = await sb.from("reports").insert(row);
+  const dup = error && /duplicate|unique/i.test(error.message || "");
+  if (error && !dup){ writeFailed(error); if (btn){ btn.disabled = false; btn.textContent = "Send report"; } return; }
+  RP = null; closeSheet();
+  if (!dup){ REPORTS.push(Object.assign({reporter:me, status:"open", created_at:new Date().toISOString()}, row)); notifyGroup({type:"report", report_id:row.id}); }
+  render(); scheduleRefresh();
+  if (!reviewersOf(rp.uid).size) toast("Reported, but no one else can review it: " + shortName(rp.uid) + " is the only admin of the groups you share.");
+  else toast(rp.kind === "meal" ? "Reported. The admins have been told, and the post is now hidden for you." : "Reported. The admins have been told.");
+}
+async function undoReport(id){
+  const {error} = await sb.from("reports").delete().eq("id", id);
+  if (error){ writeFailed(error); return; }
+  REPORTS = REPORTS.filter(r => r.id !== id); closeSheet(); render(); toast("Report withdrawn.");
+}
+async function dismissReport(id){
+  const {error} = await sb.from("reports").update({status:"dismissed"}).eq("id", id);
+  if (error){ writeFailed(error); return; }
+  const r = REPORTS.find(x => x.id === id); if (r) r.status = "dismissed";
+  render(); toast("Report closed. Nothing was removed.");
+}
+async function adminRemoveMeal(id){
+  const m = findMeal(id); closeSheet(); if (!m || !adminOver(m.uid)) return;
+  await sb.from("reports").update({status:"removed"}).eq("meal_id", id).eq("status", "open");
+  const {data, error} = await sb.from("meals").delete().eq("id", id).select("id");
+  if (error){ writeFailed(error); return; }
+  if (Array.isArray(data) && !data.length){ toast("Couldn't remove it. Check you're still an admin of their group."); scheduleRefresh(); return; }
+  removeFiles(mealFiles(m));
+  MEALS = MEALS.filter(x => x.id !== id);
+  REPORTS.forEach(r => { if (r.meal_id === id && r.status === "open") r.status = "removed"; });
+  if (cur().v === "dish" && !D[cur().id]) back();
+  render(); toast("Post removed."); scheduleRefresh();
+}
+async function adminClearProfile(uid){
+  closeSheet(); if (!adminOver(uid)) return;
+  const {data, error} = await sb.rpc("admin_clear_profile", {uid});
+  if (error){ writeFailed(error); return; }
+  if (typeof data === "string" && data) removeFiles([data]);
+  if (PEOPLE[uid]) Object.assign(PEOPLE[uid], {nick:"", bio:"", photo:null, photo_path:null});
+  REPORTS.forEach(r => { if (r.target_user === uid && r.kind === "profile" && r.status === "open") r.status = "removed"; });
+  render(); toast("Profile cleared."); scheduleRefresh();
+}
+function reviewBanner(){
+  const n = toReview().length;
+  return n ? '<button class="rev-banner" data-act="settings"><span class="rev-flag" aria-hidden="true">⚑</span><span class="t">'+(n === 1 ? '1 report to review' : n + ' reports to review')+'</span><span class="chev" aria-hidden="true">›</span></button>' : '';
+}
+function reviewHTML(){
+  const list = toReview(); if (!list.length) return '';
+  return '<div class="section-h"><h2>Reports to review</h2><span>'+list.length+'</span></div><section class="guide set-rev">'
+    + '<p class="hint">You\'re an admin, so reports about people in your groups come to you. Only admins see who reported.</p>'
+    + list.map(r => {
+      const m = r.kind === "meal" && r.meal_id ? findMeal(r.meal_id) : null;
+      let head, acts;
+      if (r.kind === "meal" && !m){
+        head = '<span class="t"><b>This post has already been deleted</b></span>';
+        acts = '<button class="btn sm" data-act="rep-dismiss" data-id="'+esc(r.id)+'">Close report</button>';
+      } else if (r.kind === "meal"){
+        head = '<button class="rev-ph" data-act="post" data-id="'+esc(m.id)+'" aria-label="View the post">'+photoHTML(m, false)+'</button><span class="t"><b>'+esc(dishName(m))+'</b><small>Post by '+esc(nameOf(m.uid))+'</small></span>';
+        acts = '<button class="btn sm" data-act="post" data-id="'+esc(m.id)+'">View</button><button class="btn sm rev-rm" data-act="rm-ask" data-id="'+esc(m.id)+'">Remove post</button><button class="btn sm" data-act="rep-dismiss" data-id="'+esc(r.id)+'">Leave it up</button>';
+      } else {
+        head = avatar(r.target_user) + '<span class="t"><b>'+esc(nameOf(r.target_user))+'</b><small>Profile</small></span>';
+        acts = '<button class="btn sm" data-act="user" data-id="'+esc(r.target_user)+'">View</button><button class="btn sm rev-rm" data-act="clr-ask" data-id="'+esc(r.target_user)+'">Clear photo, name and bio</button><button class="btn sm" data-act="rep-dismiss" data-id="'+esc(r.id)+'">Leave it</button>';
+      }
+      return '<div class="rev-item"><div class="rev-h">'+head+'</div>'
+        + '<p class="rev-why"><b>'+esc(repReasonText(r.reason))+'</b> · <span>Reported by '+esc(nameOf(r.reporter))+'</span> · <span>'+fmtDate((r.created_at || "").slice(0, 10))+'</span></p>'
+        + (r.note ? '<p class="rev-note cap">“'+esc(r.note)+'”</p>' : '')
+        + '<div class="row-btns">'+acts+'</div></div>';
+    }).join("") + '</section>';
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest && e.target.closest('[data-act^="rep-"],[data-act="rm-ask"],[data-act="rm-do"],[data-act="clr-ask"],[data-act="clr-do"],[data-act="user-menu"]'); if (!t) return;
+  e.preventDefault();
+  const a = t.dataset.act, id = t.dataset.id;
+  switch (a){
+    case "user-menu": openSheet(userMenuHTML(id)); break;
+    case "rep-open": openReport(t.dataset.kind, id); break;
+    case "rep-reason": if (RP){ RP.reason = id; document.querySelectorAll(".rep-r").forEach(b => b.setAttribute("aria-checked", String(b === t))); const s = $("#rep-send"); if (s) s.disabled = false; } break;
+    case "rep-send": sendReport(); break;
+    case "rep-undo": undoReport(id); break;
+    case "rep-show": REP_SHOWN.add(id); if (t.closest("#sheet") && findMeal(id)) openSheet(postCard(findMeal(id))); else render(); break;
+    case "rep-hide": REP_SHOWN.delete(id); closeSheet(); render(); break;
+    case "rep-dismiss": dismissReport(id); break;
+    case "rm-ask": openSheet('<div class="stack"><h2 style="font-size:20px">Remove this post?</h2><p class="hint"><span>It comes out of everyone\'s feed and their passport, along with its photos.</span> <span>This can\'t be undone.</span></p><div class="row-btns"><button class="btn" data-act="close">Keep it</button><button class="btn primary rev-go" data-act="rm-do" data-id="'+esc(id)+'">Remove</button></div></div>'); break;
+    case "rm-do": adminRemoveMeal(id); break;
+    case "clr-ask": openSheet('<div class="stack"><h2 style="font-size:20px">Clear this profile?</h2><p class="hint"><span>Their profile photo, name and bio will be removed.</span> <span>They can add new ones.</span></p><div class="row-btns"><button class="btn" data-act="close">Cancel</button><button class="btn primary rev-go" data-act="clr-do" data-id="'+esc(id)+'">Clear</button></div></div>'); break;
+    case "clr-do": adminClearProfile(id); break;
+  }
+});
+/* photo tiles of a post you reported are blurred too */
+const _renderRep = render;
+render = function(){ const r = _renderRep.apply(this, arguments); document.querySelectorAll('.tile[data-act="post"]').forEach(t => t.classList.toggle("rep-tile", repHidden(t.dataset.id))); return r; };
+
 /* ---------- Pull down to refresh ----------
    At the top of a page, drag down and let go to fetch the latest meals, likes and profiles (and check for a
    new version of the app). Not over the map, the photo framer or a text box, and not while a sheet is open. */
@@ -3710,7 +3895,8 @@ document.addEventListener("click", e => {
     case "cancel-bio": editingBio = false; render(); break;
     case "save-bio": { const v = ($("#bio").value || "").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, BIO_MAX), had = !!(PEOPLE[me] && PEOPLE[me].bio); editingBio = false; setPerson({bio:v}); toast(v ? "Bio saved." : had ? "Bio removed." : "No bio added."); break; }
     case "save-nick": { const v = ($("#nick").value || "").trim().slice(0,30); editingNick = false; setPerson({nick:v}); toast(v ? "Friends now see you as " + v + "." : "Friends now see your account name."); break; }
-    case "menu": openSheet('<div class="menu"><button data-act="edit-meal" data-id="'+esc(id)+'">Edit this meal</button><button class="danger" data-act="del-ask" data-id="'+esc(id)+'">Delete this meal</button><button data-act="close">Cancel</button></div>'); break;
+    case "menu": if (findMeal(id) && findMeal(id).uid !== me){ openSheet(otherMenuHTML(findMeal(id))); break; }
+      openSheet('<div class="menu"><button data-act="edit-meal" data-id="'+esc(id)+'">Edit this meal</button><button class="danger" data-act="del-ask" data-id="'+esc(id)+'">Delete this meal</button><button data-act="close">Cancel</button></div>'); break;
     case "del-ask": openSheet('<div class="stack"><h2 style="font-size:20px">Delete this meal?</h2><p class="hint">It comes out of your passport and your friends\' feed. This can\'t be undone.</p><div class="row-btns"><button class="btn" data-act="close">Keep it</button><button class="btn primary" data-act="del" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Delete</button></div></div>'); break;
     case "del": { const m = findMeal(id); closeSheet(); if (m){ deleteMeal(m); toast("Meal deleted."); } break; }
     case "log": openComposer(id || (cur().v === "dish" ? cur().id : "")); break;
