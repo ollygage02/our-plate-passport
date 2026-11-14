@@ -358,3 +358,8 @@ alter table public.meals add constraint meals_extra_photos_max check (jsonb_type
 alter table public.profiles add column if not exists home_currency text;
 alter table public.profiles drop constraint if exists profiles_home_currency_code;
 alter table public.profiles add constraint profiles_home_currency_code check (home_currency is null or home_currency ~ '^[A-Z]{3}$');
+
+-- ---------- Short bio under the name on a passport ----------
+alter table public.profiles add column if not exists bio text not null default '';
+alter table public.profiles drop constraint if exists profiles_bio_length;
+alter table public.profiles add constraint profiles_bio_length check (char_length(bio) <= 150);
