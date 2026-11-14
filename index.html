@@ -796,9 +796,8 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .rev-rm,.rev-go{color:var(--stamp)}
 .btn.primary.rev-go{background:var(--stamp);border-color:var(--stamp);color:#fff}
 .ptr{position:fixed;left:50%;z-index:4;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(20,30,25,.16);display:grid;place-items:center;color:var(--muted);opacity:0;pointer-events:none;transform:translateY(-44px)}
-.ptr svg{width:18px;height:18px;transition:transform .2s}
+.ptr svg{width:18px;height:18px}
 .ptr.ready{color:var(--accent)}
-.ptr.ready svg{transform:rotate(180deg)}
 .ptr.busy svg{display:none}
 .ptr.busy::after{content:"";width:16px;height:16px;box-sizing:border-box;border-radius:50%;border:2.2px solid var(--line);border-top-color:var(--accent);animation:boot-spin .75s linear infinite}
 .post .photo,.post .car{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -3742,8 +3741,9 @@ render = function(){ const r = _renderRep.apply(this, arguments); document.query
 /* ---------- Pull down to refresh ----------
    At the top of a page, drag down and let go to fetch the latest meals, likes and profiles (and check for a
    new version of the app). Not over the map, the photo framer or a text box, and not while a sheet is open. */
-const PTR_GO = 62, PTR_MAX = 120, PTR_HOLD = 52;
-let PTR = null, ptrBusy = false;
+const PTR_GO = 62, PTR_MAX = 130, PTR_HOLD = 52;
+let PTR = null, ptrBusy = false, ptrFrame = 0, ptrWant = 0, ptrTop = 0, ptrTimer = 0;
+const PTR_EASE = "cubic-bezier(.22,1,.36,1)";   /* quick start, long soft landing */
 function ptrEl(){
   let el = document.getElementById("ptr");
   if (!el){
@@ -3758,25 +3758,51 @@ function ptrCan(t){
   if (swSheetOpen() || document.getElementById("wrap") || document.getElementById("avz")) return false;
   return !!(t && t.closest) && !t.closest("input, textarea, select, [contenteditable], .cropper, svg.world, .tabs, #sheet-wrap, .upd, #toast");
 }
-function ptrPaint(d, anim){
-  const v = $("#view"), el = ptrEl(), bar = $("#bar"), top = bar ? bar.getBoundingClientRect().bottom : 0;
-  v.style.transition = el.style.transition = anim ? "transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s" : "none";
-  v.style.transform = d > 0 ? "translateY(" + d + "px)" : "";
-  el.style.top = top + "px";
-  el.style.transform = "translateY(" + (d > 0 ? d / 2 - 18 : -44) + "px)";
+/* get ready to move: measure once, and let the phone move the page as one layer instead of redrawing it */
+function ptrPrep(){
+  clearTimeout(ptrTimer);
+  const bar = $("#bar"), el = ptrEl(), v = $("#view");
+  ptrTop = bar ? bar.getBoundingClientRect().bottom : 0;
+  el.style.top = ptrTop + "px";
+  v.style.willChange = el.style.willChange = "transform";
+}
+/* ms: 0 follows the finger exactly; otherwise glide there over that long.
+   The arrow turns as you pull: pointing down at first, up once letting go will refresh. */
+function ptrPaint(d, ms){
+  const v = $("#view"), el = ptrEl(), tr = ms ? "transform " + ms + "ms " + PTR_EASE + ", opacity " + Math.min(ms, 220) + "ms ease" : "none";
+  v.style.transition = el.style.transition = tr;
+  v.style.transform = d > 0 ? "translate3d(0," + d + "px,0)" : "translate3d(0,0,0)";
+  el.style.transform = "translate3d(0," + (d > 0 ? d / 2 - 18 : -44) + "px,0) rotate(" + (ptrBusy ? 0 : Math.min(d, PTR_GO) / PTR_GO * 180) + "deg)";
   el.style.opacity = d > 0 ? (ptrBusy ? 1 : Math.min(1, d / PTR_GO)) : 0;
   el.classList.toggle("ready", d >= PTR_GO);
 }
-function ptrRest(){ ptrPaint(0, true); const el = ptrEl(); setTimeout(() => { if (!ptrBusy){ el.classList.remove("busy"); $("#view").style.transition = ""; } }, 300); }
+/* finger moves arrive more often than the screen redraws: draw only the latest one, once per frame */
+function ptrFollow(d){
+  ptrWant = d;
+  if (!ptrFrame) ptrFrame = requestAnimationFrame(() => { ptrFrame = 0; if (PTR && PTR.on) ptrPaint(ptrWant, 0); });
+}
+function ptrRest(){
+  if (ptrFrame){ cancelAnimationFrame(ptrFrame); ptrFrame = 0; }
+  const v = $("#view"), from = parseFloat((v.style.transform.match(/,\s*(-?[\d.]+)px/) || [])[1]) || 0;
+  const ms = Math.round(Math.min(420, 260 + from * 1.3));   /* further to go, a little longer */
+  ptrPaint(0, ms);
+  clearTimeout(ptrTimer);
+  ptrTimer = setTimeout(() => {
+    if (ptrBusy || (PTR && PTR.on)) return;
+    const el = ptrEl(); el.classList.remove("busy", "ready");
+    v.style.transition = v.style.transform = v.style.willChange = el.style.willChange = "";
+  }, ms + 40);
+}
 async function ptrRun(){
   ptrBusy = true; const el = ptrEl(), t0 = Date.now();
-  el.classList.add("busy"); ptrPaint(PTR_HOLD, true);
+  if (ptrFrame){ cancelAnimationFrame(ptrFrame); ptrFrame = 0; }
+  el.classList.add("busy"); ptrPaint(PTR_HOLD, 300);
   try {
     if (navigator.onLine === false) toast("You're offline. Showing what's saved on this phone.");
     else { flushOutbox(); await Promise.race([refresh(), new Promise(r => setTimeout(r, 12000))]); }
     if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
   } catch(e) {}
-  const wait = 650 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const wait = 700 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
   ptrBusy = false; ptrRest();
 }
 document.addEventListener("touchstart", e => {
@@ -3791,16 +3817,18 @@ document.addEventListener("touchmove", e => {
     if (dy <= 0 || Math.abs(dx) >= dy){ if (Math.abs(dx) > 8 || dy < -4) PTR = null; return; }
     if (window.scrollY > 0){ PTR = null; return; }
     if (e.cancelable) e.preventDefault();   /* stop the page bouncing (and Chrome's own reload) */
-    if (dy < 8) return;
-    PTR.on = true;
+    if (dy < 6) return;
+    PTR.on = true; PTR.y0 += 6; ptrPrep();   /* start from where the finger is, so nothing jumps */
   }
   if (e.cancelable) e.preventDefault();
-  const x = dy - 8, d = PTR_MAX * (1 - 1 / (x * 0.55 / PTR_MAX + 1));   /* gets harder to pull the further you go */
+  /* follows the finger closely at first and gets harder to pull the further you go; pushing back up past
+     where you started just closes it */
+  const x = Math.max(0, e.touches[0].clientY - PTR.y0), d = PTR_MAX * (1 - 1 / (x * 0.62 / PTR_MAX + 1));
   if (d >= PTR_GO && PTR.d < PTR_GO && navigator.vibrate) try { navigator.vibrate(8); } catch(err) {}
-  PTR.d = d; ptrPaint(d, false);
+  PTR.d = d; ptrFollow(d);
 }, {passive:false});
 document.addEventListener("touchend", () => { if (!PTR) return; const p = PTR; PTR = null; if (!p.on) return; if (p.d >= PTR_GO) ptrRun(); else ptrRest(); });
-document.addEventListener("touchcancel", () => { if (PTR && PTR.on) ptrRest(); PTR = null; });
+document.addEventListener("touchcancel", () => { if (PTR && PTR.on){ PTR = null; ptrRest(); } PTR = null; });
 
 /* ---------- Double-tap a photo to like it ----------
    Like Instagram: two quick taps on a post's photo like it (never unlike) and a heart pops up over the photo.
