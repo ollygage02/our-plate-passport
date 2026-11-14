@@ -347,3 +347,9 @@ drop policy if exists "admins remove, members leave" on public.group_members;
 create policy "admins remove, members leave" on public.group_members for delete using (
   (public.is_group_admin(group_id) and email <> public.my_email())
   or (email = public.my_email() and (role = 'member' or public.has_other_admin(group_id))));
+
+-- ---------- Several photos per meal (carousel) ----------
+-- Photo 1 stays in photo_path / thumb_path; photos 2 to 10 go here, in order: [{"photo_path":..., "thumb_path":...}]
+alter table public.meals add column if not exists extra_photos jsonb not null default '[]'::jsonb;
+alter table public.meals drop constraint if exists meals_extra_photos_max;
+alter table public.meals add constraint meals_extra_photos_max check (jsonb_typeof(extra_photos) = 'array' and jsonb_array_length(extra_photos) <= 9);

@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=1"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=2"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -748,6 +748,31 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
 .lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
+.car{position:relative}
+.car-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.car-track::-webkit-scrollbar{display:none}
+.car-slide{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;border-radius:0}
+.car-n{position:absolute;top:10px;right:10px;background:rgba(10,14,12,.62);color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;pointer-events:none}
+.car-dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:5px;pointer-events:none}
+.car-dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 0 2px rgba(0,0,0,.35);transition:transform .2s,background .2s}
+.car-dots i.on{background:#fff;transform:scale(1.25)}
+.car-arr{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.88);color:#111;font-size:24px;line-height:30px;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none}
+.car-arr.prev{left:10px}.car-arr.next{right:10px}
+@media (hover:hover) and (pointer:fine){.car:hover .car-arr:not([hidden]){display:block}}
+.car .pend{position:absolute;left:10px;top:10px}
+.ph-link{display:block;cursor:pointer}
+.photo .multi{position:absolute;top:6px;right:6px;width:20px;height:20px;color:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));pointer-events:none}
+.photo .multi svg{width:100%;height:100%}
+.pics{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 2px;scrollbar-width:none}
+.pics::-webkit-scrollbar{display:none}
+.pic{position:relative;flex:none}
+.pic-b{display:block;width:62px;height:62px;border-radius:12px;overflow:hidden;outline:2px solid transparent;outline-offset:2px}
+.pic.on .pic-b{outline-color:var(--accent)}
+.pic-b img{width:100%;height:100%;object-fit:cover;display:block}
+.pic-x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--fg);color:var(--bg);font-size:15px;line-height:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.pic-cover{position:absolute;left:4px;bottom:4px;background:rgba(10,14,12,.65);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;pointer-events:none}
+.pic-add{flex:none;width:62px;height:62px;border-radius:12px;border:2px dashed var(--line);display:grid;place-items:center;font-size:28px;color:var(--muted);cursor:pointer}
+.crop-still{width:100%;height:100%;object-fit:cover;display:block}
 .auth-lang{max-width:420px;margin:16px auto 0;width:100%}
 .auth-lang .lang-seg{box-shadow:none;background:transparent;border:1px solid var(--line)}
 </style>
@@ -1512,13 +1537,21 @@ async function refresh(first){
   if (applyRows(rows)){ mode = "shared"; saveCache(rows); } else clearCache();
   render();
 }
+/* a meal's photos in order: the first lives in photo_path / thumb_path, the rest in extra_photos */
+const MAX_PICS = 10;
+function mealPhotos(r){
+  return [{photo_path:r.photo_path, thumb_path:r.thumb_path}].concat(Array.isArray(r.extra_photos) ? r.extra_photos : [])
+    .filter(x => x && (x.thumb_path || x.photo_path))
+    .map(x => ({photo_path:x.photo_path || null, thumb_path:x.thumb_path || null, photo:pubUrl(x.photo_path), thumb:pubUrl(x.thumb_path || x.photo_path)}));
+}
+const mealFiles = m => [m.photo_path, m.thumb_path].concat((m.photos || []).flatMap(p => [p.photo_path, p.thumb_path])).filter(Boolean);
 /* turn database rows into the app's state; false if you're no longer in any group */
 function applyRows(d){
   const likes = {};
   (d.l || []).forEach(x => { (likes[x.meal_id] = likes[x.meal_id] || {})[x.user_id] = true; });
   MEALS = d.m.map(r => ({id:r.id, uid:r.user_id, dish:r.dish, custom:r.custom || "", country:r.country, date:r.date, place:r.place || "", caption:r.caption || "",
     ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
-    photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), likes:likes[r.id] || {}, created:r.created_at}));
+    photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), photos:mealPhotos(r), likes:likes[r.id] || {}, created:r.created_at}));
   PEOPLE = {};
   d.p.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path, email:(r.email || "").toLowerCase()}; });
   if (d.g && d.gm){
@@ -1579,17 +1612,30 @@ async function uploadPhoto(path, blob){
   return path;
 }
 const removeFiles = paths => { const ps = paths.filter(Boolean); if (ps.length) sb.storage.from("photos").remove(ps).catch(() => {}); };
-async function addMeal(m, blobs, wasNew){
-  if (navigator.onLine === false) return queueMeal(m, blobs, wasNew);   /* no signal: keep it on the phone */
+/* upload each photo (a small and a full-size copy); returns their paths in order, or removes what it uploaded and throws */
+async function uploadPics(base, pics){
+  const paths = [], files = [];
+  try {
+    for (let i = 0; i < pics.length; i++){
+      const b = base + (i ? "-" + i : "");
+      const thumb_path = await uploadPhoto(b + "-t.jpg", pics[i].thumb); files.push(thumb_path);
+      const photo_path = pics[i].full ? await uploadPhoto(b + ".jpg", pics[i].full) : null; if (photo_path) files.push(photo_path);
+      paths.push({photo_path, thumb_path});
+    }
+  } catch(e){ removeFiles(files); throw e; }
+  return paths;
+}
+const photoCols = paths => ({photo_path:paths[0].photo_path, thumb_path:paths[0].thumb_path, extra_photos:paths.slice(1)});
+async function addMeal(m, pics, wasNew){
+  if (navigator.onLine === false) return queueMeal(m, pics, wasNew);   /* no signal: keep it on the phone */
   try {
     const id = newId(), base = me + "/" + id + "-" + Date.now().toString(36);
-    const thumb_path = await uploadPhoto(base + "-t.jpg", blobs.thumb);
-    const photo_path = blobs.full ? await uploadPhoto(base + ".jpg", blobs.full) : null;
-    const {error} = await sb.from("meals").insert({id, user_id:me, dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption,
-      ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, photo_path, thumb_path});
-    if (error){ removeFiles([thumb_path, photo_path]); throw error; }
+    const paths = await uploadPics(base, pics);
+    const {error} = await sb.from("meals").insert(Object.assign({id, user_id:me, dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption,
+      ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio}, photoCols(paths)));
+    if (error){ removeFiles(paths.flatMap(p => [p.thumb_path, p.photo_path])); throw error; }
     m.id = id; await refresh(); return true;
-  } catch(e){ if (isNetErr(e)) return queueMeal(m, blobs, wasNew); writeFailed(e); return false; }
+  } catch(e){ if (isNetErr(e)) return queueMeal(m, pics, wasNew); writeFailed(e); return false; }
 }
 async function toggleLike(m){
   const on = !(m.likes && m.likes[me]);
@@ -1601,7 +1647,7 @@ async function toggleLike(m){
 async function deleteMeal(m){
   const {error} = await sb.from("meals").delete().eq("id", m.id);
   if (error){ writeFailed(error); return; }
-  removeFiles([m.photo_path, m.thumb_path]); await refresh();
+  removeFiles(mealFiles(m)); await refresh();
 }
 async function setPerson(patch){
   const row = {};
@@ -1804,10 +1850,11 @@ const obPut = item => obRun("readwrite", s => s.put(item));
 const obDel = id => obRun("readwrite", s => s.delete(id));
 
 /* what's waiting, as meals the rest of the app can show */
+const outboxPics = it => it.pics && it.pics.length ? it.pics : [{thumb:it.thumb, full:it.full || null}];
 function asPendingMeal(it){
   const old = OUTBOX_MEALS.find(x => x.id === it.id);
-  return Object.assign({}, it.meal, {id:it.id, uid:it.uid, likes:{}, pending:true,
-    thumb:old ? old.thumb : URL.createObjectURL(it.thumb), photo:old ? old.photo : (it.full ? URL.createObjectURL(it.full) : null)});
+  const photos = old ? old.photos : outboxPics(it).map(p => ({thumb:URL.createObjectURL(p.thumb), photo:p.full ? URL.createObjectURL(p.full) : null}));
+  return Object.assign({}, it.meal, {id:it.id, uid:it.uid, likes:{}, pending:true, photos, thumb:photos[0].thumb, photo:photos[0].photo});
 }
 async function loadOutbox(){
   try { OUTBOX_MEALS = (await obAll()).filter(it => it.uid === me).map(asPendingMeal); } catch(e) { OUTBOX_MEALS = []; }
@@ -1817,13 +1864,13 @@ function mergeOutbox(){
   const real = MEALS.filter(m => !m.pending), ids = new Set(real.map(m => m.id));
   MEALS = OUTBOX_MEALS.filter(m => !ids.has(m.id) && m.uid === me).concat(real);
 }
-async function queueMeal(m, blobs, wasNew){
+async function queueMeal(m, pics, wasNew){
   const id = newId();
   const meal = {dish:m.dish, custom:m.custom, country:m.country, date:m.date, place:m.place, caption:m.caption, ratings:m.ratings, rating:m.rating, price:m.price, ratio:m.ratio, created:m.created};
-  try { await obPut({id, uid:me, meal, thumb:blobs.thumb, full:blobs.full || null, wasNew:!!wasNew, queuedAt:Date.now()}); }
+  try { await obPut({id, uid:me, meal, pics, thumb:pics[0].thumb, full:pics[0].full || null, wasNew:!!wasNew, queuedAt:Date.now()}); }
   catch(e) { console.error(e); toast("Couldn't save the meal on this phone. Try again when you have signal."); return false; }
   m.id = id;
-  OUTBOX_MEALS.unshift(asPendingMeal({id, uid:me, meal, thumb:blobs.thumb, full:blobs.full}));
+  OUTBOX_MEALS.unshift(asPendingMeal({id, uid:me, meal, pics}));
   mergeOutbox(); render(); scheduleFlush(30000);
   return "queued";
 }
@@ -1838,14 +1885,13 @@ async function flushOutbox(){
     for (const it of items.sort((a, b) => a.queuedAt - b.queuedAt)){
       try {
         const base = me + "/" + it.id + "-" + Date.now().toString(36);
-        const thumb_path = await uploadPhoto(base + "-t.jpg", it.thumb);
-        const photo_path = it.full ? await uploadPhoto(base + ".jpg", it.full) : null;
+        const paths = await uploadPics(base, outboxPics(it));
         const {error} = await sb.from("meals").insert(Object.assign({id:it.id, user_id:me}, {dish:it.meal.dish, custom:it.meal.custom, country:it.meal.country, date:it.meal.date,
-          place:it.meal.place, caption:it.meal.caption, ratings:it.meal.ratings, rating:it.meal.rating, price:it.meal.price, ratio:it.meal.ratio, photo_path, thumb_path}));
-        if (error && !/duplicate key|already exists/i.test(error.message || "")){ removeFiles([thumb_path, photo_path]); throw error; }
+          place:it.meal.place, caption:it.meal.caption, ratings:it.meal.ratings, rating:it.meal.rating, price:it.meal.price, ratio:it.meal.ratio}, photoCols(paths)));
+        if (error && !/duplicate key|already exists/i.test(error.message || "")){ removeFiles(paths.flatMap(p => [p.thumb_path, p.photo_path])); throw error; }
         await obDel(it.id); sent++;
         const done = OUTBOX_MEALS.find(x => x.id === it.id);
-        if (done){ try { URL.revokeObjectURL(done.thumb); if (done.photo) URL.revokeObjectURL(done.photo); } catch(e) {} }
+        if (done){ try { (done.photos || []).forEach(p => { URL.revokeObjectURL(p.thumb); if (p.photo) URL.revokeObjectURL(p.photo); }); } catch(e) {} }
         OUTBOX_MEALS = OUTBOX_MEALS.filter(x => x.id !== it.id);
         if (typeof announceMeal === "function") announceMeal(Object.assign({}, it.meal, {id:it.id}), it.wasNew);
       } catch(e) {
@@ -2048,7 +2094,7 @@ function wrapCard(uid){
 async function usePhotoFile(file){
   if (!K) openComposer(""); if (!K) return;
   K.busy = true; K.pasteAsk = false; renderComposer();
-  try { const {img} = await loadImg(file); initCrop(img); K.thumb = null; K.full = null; } catch(err) { photoError(err); }
+  try { const {img} = await loadImg(file); if (K.pics.length < MAX_PICS){ addPic(img); K.sel = K.pics.length - 1; } } catch(err) { photoError(err); }
   K.busy = false; renderComposer();
 }
 async function pastePhoto(){
@@ -2154,8 +2200,8 @@ function swResetSheet(){
 }
 
 /* ---- don't lose a half-logged meal to a stray swipe ---- */
-const swSig = () => K ? JSON.stringify([K.country, K.dish, K.custom, K.place, K.date, K.caption, K.ratings, K.price, K.cur, K.frame]) : "";
-function swMark(){ if (K){ K._sig = swSig(); K._thumb = K.thumb; K._src = K.srcImg; } }
+const swSig = () => K ? JSON.stringify([K.country, K.dish, K.custom, K.place, K.date, K.caption, K.ratings, K.price, K.cur, K.frame, (K.pics || []).map(p => p.key + (p.src ? ":" + JSON.stringify(p.crop) : ""))]) : "";
+function swMark(){ if (K) K._sig = swSig(); }
 const _openComposerSw = openComposer;
 openComposer = function(){ const r = _openComposerSw.apply(this, arguments); swMark(); return r; };
 const _openEditorSw = openEditor;
@@ -2163,7 +2209,7 @@ openEditor = function(){ const r = _openEditorSw.apply(this, arguments); swMark(
 function swComposerDirty(){
   const h = document.querySelector("#sheet .sheet-h h2");
   if (!K || K._sig === undefined || !h || !document.querySelector('#sheet [data-act="post-meal"]')) return false;
-  return swSig() !== K._sig || K.thumb !== K._thumb || K.srcImg !== K._src;
+  return swSig() !== K._sig;
 }
 function swAskDiscard(){
   if (document.getElementById("sw-discard")) return;
@@ -2475,7 +2521,20 @@ async function squarePhoto(file){
 document.addEventListener("error", e => { const t = e.target; if (t && t.tagName === "IMG" && t.dataset.fb && t.getAttribute("src") !== t.dataset.fb) t.src = t.dataset.fb; }, true);
 function photoHTML(m, big){
   const src = big && m.photo ? m.photo : m.thumb;
-  return '<span class="photo"'+(big && m.ratio === "3:4" ? ' style="aspect-ratio:3/4"' : '')+'><img src="'+esc(src)+'"'+(big && m.photo ? ' data-fb="'+esc(m.thumb)+'"' : '')+' alt="'+esc(dishName(m))+'" loading="lazy"></span>';
+  return '<span class="photo"'+(big && m.ratio === "3:4" ? ' style="aspect-ratio:3/4"' : '')+'><img src="'+esc(src)+'"'+(big && m.photo ? ' data-fb="'+esc(m.thumb)+'"' : '')+' alt="'+esc(dishName(m))+'" loading="lazy">'
+    + (!big && m.photos && m.photos.length > 1 ? '<span class="multi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="7" y="7" width="13" height="13" rx="2.5"/><path d="M4 16V6.5A2.5 2.5 0 0 1 6.5 4H16"/></svg></span>' : '')+'</span>';
+}
+/* several photos: swipe through them like an Instagram carousel (dots, a 2/3 counter, arrows with a mouse) */
+function carouselHTML(m){
+  const ps = (m.photos || []).filter(p => p.thumb || p.photo);
+  if (ps.length < 2) return photoHTML(m, true);
+  const ar = m.ratio === "3:4" ? "3/4" : "4/3";
+  return '<div class="car"><div class="car-track" data-mid="'+esc(m.id)+'" tabindex="0" aria-label="'+ps.length+' photos">'
+    + ps.map(p => '<span class="photo car-slide" style="aspect-ratio:'+ar+'"><img src="'+esc(p.photo || p.thumb)+'"'+(p.photo && p.thumb ? ' data-fb="'+esc(p.thumb)+'"' : '')+' alt="'+esc(dishName(m))+'" loading="lazy" draggable="false"></span>').join("")
+    + '</div><span class="car-n mono" aria-hidden="true"><b>1</b>/'+ps.length+'</span>'
+    + '<span class="car-dots" aria-hidden="true">'+ps.map((_, i) => '<i'+(i ? '' : ' class="on"')+'></i>').join("")+'</span>'
+    + '<button class="car-arr prev" data-act="car" data-id="-1" aria-label="Previous photo" hidden>‹</button><button class="car-arr next" data-act="car" data-id="1" aria-label="Next photo">›</button>'
+    + (m.pending ? '<span class="pend">⤴ Waiting to upload</span>' : '')+'</div>';
 }
 const dishName = m => m.dish && D[m.dish] ? D[m.dish].name : (m.custom || "Meal");
 
@@ -2496,7 +2555,9 @@ function postCard(m){
    + '<div class="post-h"><button class="who" data-act="user" data-id="'+esc(m.uid)+'">'+avatar(m.uid)+'<span class="who-t"><b>'+esc(nameOf(m.uid))+'</b><small>'+esc(m.place || fmtDate(m.date))+'</small></span></button>'
    + '<span class="cstamp" title="'+esc(c.name)+'">'+esc(c.code)+'</span>'
    + (m.uid === me && canWrite() ? '<button class="icon-btn" data-act="menu" data-id="'+esc(m.id)+'" aria-label="More options">'+I.more+'</button>' : '') + '</div>'
-   + (m.dish && D[m.dish] ? '<button style="display:block;width:100%" data-act="dish" data-id="'+m.dish+'">'+photoHTML(m, true)+'</button>' : photoHTML(m, true))
+   + (m.photos && m.photos.length > 1
+       ? (m.dish && D[m.dish] ? '<div class="ph-link" data-act="dish" data-id="'+m.dish+'">'+carouselHTML(m)+'</div>' : carouselHTML(m))
+       : (m.dish && D[m.dish] ? '<button style="display:block;width:100%" data-act="dish" data-id="'+m.dish+'">'+photoHTML(m, true)+'</button>' : photoHTML(m, true)))
    + '<div class="post-b"><div class="acts">'
    + '<button class="act'+(liked ? ' liked' : '')+'" data-act="like" data-id="'+esc(m.id)+'" aria-pressed="'+liked+'" aria-label="Like"'+(canWrite() ? '' : ' disabled')+'>'+I.heart+'<span class="mono">'+likeCount(m)+'</span></button>'
    + '<span class="date">'+(priceText(m.price) ? esc(priceText(m.price))+' · ' : '')+fmtDate(m.date)+'</span></div>'
@@ -3056,12 +3117,13 @@ let K = null;  /* composer state */
 function openComposer(dishId){
   if (!canWrite()){ toast(mode === "connecting" ? "Still connecting. Try again in a moment." : "Sign in to log meals."); return; }
   const d = dishId && D[dishId];
-  K = {thumb:null, full:null, busy:false, posting:false, country:d ? d.country : "", dish:dishId || "", custom:"", place:"", date:todayISO(), caption:"", ratings:{taste:0, look:0, value:0}, price:"", cur:d ? CUR[d.country] || "EUR" : "EUR", curManual:false};
+  K = {pics:[], sel:0, frame:null, busy:false, posting:false, country:d ? d.country : "", dish:dishId || "", custom:"", place:"", date:todayISO(), caption:"", ratings:{taste:0, look:0, value:0}, price:"", cur:d ? CUR[d.country] || "EUR" : "EUR", curManual:false};
   renderComposer();
 }
 function openEditor(m){
   if (!m || m.uid !== me || !canWrite()) return;
-  K = {editId:m.id, thumb:m.thumb, photoUrl:m.photo || m.thumb, full:null, photoChanged:false, busy:false, posting:false, country:m.country || "", dish:m.dish && D[m.dish] ? m.dish : "__other",
+  K = {editId:m.id, pics:(m.photos && m.photos.length ? m.photos : [{photo:m.photo, thumb:m.thumb, photo_path:m.photo_path, thumb_path:m.thumb_path}]).map(p => ({key:newId(), src:null, url:p.thumb || p.photo, photoUrl:p.photo || p.thumb, photo_path:p.photo_path, thumb_path:p.thumb_path})),
+       sel:0, frame:m.ratio === "3:4" ? 3 / 4 : 4 / 3, busy:false, posting:false, country:m.country || "", dish:m.dish && D[m.dish] ? m.dish : "__other",
        custom:m.custom || "", place:m.place || "", date:m.date || todayISO(), caption:m.caption || "", ratings:Object.assign({taste:0, look:0, value:0}, m.ratings || {}), legacy:(!m.ratings && +m.rating) || 0,
        price:m.price && +m.price.amount ? String(m.price.amount) : "", cur:(m.price && m.price.cur) || CUR[m.country] || "EUR", curManual:true};
   renderComposer();
@@ -3095,17 +3157,10 @@ const breakdownHTML = r => r ? CRITERIA.filter(([k]) => +r[k]).map(([k, l, sh]) 
 const starsHTML = r => r ? '<span class="rating" role="img" aria-label="Rated '+r+' out of 5">'+'★'.repeat(r)+'<span class="off">'+'★'.repeat(5 - r)+'</span></span>' : '';
 function renderComposer(){
   const c = K.country ? C[K.country] : null, g = c && GUIDES[c.code];
-  const ready = (K.thumb || K.srcImg) && K.country && K.dish && (K.dish !== "__other" || K.custom.trim()) && !K.posting;
+  const ready = K.pics.length && K.country && K.dish && (K.dish !== "__other" || K.custom.trim()) && !K.posting;
   const placeOpts = g ? Array.from(new Set(g.dishes.flatMap(x => x.places.map(p => p.n)).concat(g.more.flatMap(s => s.places.map(p => p.n))))) : [];
   openSheet('<div class="sheet-h"><h2>'+(K.editId ? 'Edit meal' : 'Log a meal')+'</h2><button class="icon-btn" data-act="close" aria-label="Close">'+I.close+'</button></div><div class="stack">'
-   + (K.srcImg
-       ? '<div class="frame-pick" role="group" aria-label="Photo shape">'+[["p","Portrait"],["l","Landscape"]].map(([k, l]) => '<button class="fchip" data-act="frame" data-id="'+k+'" aria-pressed="'+((K.frame < 1) === (k === "p"))+'">'+l+'</button>').join("")+'</div>'
-         + '<div class="cropper" style="aspect-ratio:'+(K.frame < 1 ? '3/4;max-width:min(100%,360px)' : '4/3')+'"><canvas id="crop-cv" aria-label="Photo preview. Drag to choose which part shows."></canvas><span class="crop-hint">Drag to position · pinch or slide to zoom</span></div>'
-         + '<div class="crop-ctrl"><label class="label" for="crop-z">Zoom</label><input id="crop-z" type="range" min="1" max="4" step="0.01" value="'+K.crop.z+'"></div>'
-       : '<label class="drop" for="c-file">'+(K.thumb ? '<img src="'+K.thumb+'" alt="Your photo">' : I.camera+'<b style="color:var(--fg)">'+(K.busy ? 'Preparing photo…' : 'Add your photo')+'</b><span class="hint">Tap to choose from your phone or computer</span>')+'</label>')
-   + '<input id="c-file" class="vh" type="file" accept="image/*,.heic,.heif">'
-   + (!K.srcImg && !K.thumb && !K.editId && !K.busy ? pasteRow() : '')
-   + (K.srcImg || K.thumb ? '<p class="hint">Location data in the photo is removed. '+(!K.srcImg && K.thumb ? '<a href="#" data-act="crop-existing">Reposition this photo</a> · ' : '')+'<a href="#" data-act="pick-again">Choose a different photo</a></p>' : '')
+   + composerPhotosHTML()
    + '<div class="p-grid"><div class="field"><label class="label" for="c-country">Country</label><select id="c-country"><option value="">Choose a country</option>'+COUNTRIES.map(x => '<option value="'+x.code+'"'+(x.code === K.country ? ' selected' : '')+'>'+x.flag+' '+esc(x.name)+'</option>').join("")+'</select></div>'
    + '<div class="field"><label class="label" for="c-date">Date</label><input id="c-date" type="date" value="'+esc(K.date)+'" max="'+todayISO()+'"></div></div>'
    + (c ? '<div class="field"><label class="label" for="c-dish">Dish</label><select id="c-dish"><option value="">Choose a dish</option>'+c.dishes.map(x => '<option value="'+x.id+'"'+(x.id === K.dish ? ' selected' : '')+'>'+x.emoji+' '+esc(x.name)+'</option>').join("")+'<option value="__other"'+(K.dish === "__other" ? ' selected' : '')+'>Not on the list…</option></select></div>' : '')
@@ -3122,38 +3177,77 @@ function renderComposer(){
    + '<p class="hint">Everyone in your group can see what you post.</p>'
    + '<button class="btn primary" id="c-post" data-act="post-meal"'+(ready ? '' : ' disabled')+'>'+(K.posting ? 'Saving…' : K.editId ? 'Save changes' : 'Add to my passport')+'</button>'
    + (ready || K.posting ? '' : '<p class="hint" style="text-align:center">'+(K.editId ? 'Choose a country and a dish to save.' : 'Add a photo, a country and a dish to post.')+'</p>') + '</div>');
-  if (K.srcImg) setupCrop();
+  if (curPic() && curPic().src) setupCrop();
+}
+const curPic = () => K && K.pics[K.sel];
+function composerPhotosHTML(){
+  const p = curPic(), n = K.pics.length, ar = K.frame < 1 ? '3/4;max-width:min(100%,360px)' : '4/3';
+  if (!n) return '<label class="drop" for="c-file">'+I.camera+'<b style="color:var(--fg)">'+(K.busy ? 'Preparing photo…' : 'Add your photos')+'</b><span class="hint">Tap to choose one or more from your phone or computer</span></label>'
+    + '<input id="c-file" class="vh" type="file" accept="image/*,.heic,.heif" multiple>' + (!K.editId && !K.busy ? pasteRow() : '');
+  let h = '<div class="frame-pick" role="group" aria-label="Photo shape">'+[["p","Portrait"],["l","Landscape"]].map(([k, l]) => '<button class="fchip" data-act="frame" data-id="'+k+'" aria-pressed="'+((K.frame < 1) === (k === "p"))+'">'+l+'</button>').join("")+'</div>';
+  h += p.src
+    ? '<div class="cropper" style="aspect-ratio:'+ar+'"><canvas id="crop-cv" aria-label="Photo preview. Drag to choose which part shows."></canvas><span class="crop-hint">Drag to position · pinch or slide to zoom</span></div>'
+      + '<div class="crop-ctrl"><label class="label" for="crop-z">Zoom</label><input id="crop-z" type="range" min="1" max="4" step="0.01" value="'+p.crop.z+'"></div>'
+    : '<div class="cropper" style="aspect-ratio:'+ar+'"><img class="crop-still" src="'+esc(p.url)+'" alt="Your photo"></div>';
+  h += '<div class="pics" role="group" aria-label="Photos">'
+    + K.pics.map((x, i) => '<div class="pic'+(i === K.sel ? ' on' : '')+'"><button type="button" class="pic-b" data-act="pic-sel" data-id="'+i+'" aria-pressed="'+(i === K.sel)+'" aria-label="Photo '+(i + 1)+'"><img src="'+esc(x.url)+'" alt=""></button>'
+        + '<button type="button" class="pic-x" data-act="pic-del" data-id="'+i+'" aria-label="Remove photo '+(i + 1)+'">×</button>'+(i === 0 && n > 1 ? '<span class="pic-cover">Cover</span>' : '')+'</div>').join("")
+    + (n < MAX_PICS ? '<label class="pic-add" for="c-file" role="button" aria-label="Add more photos">'+(K.busy ? '…' : '+')+'</label>' : '')
+    + '</div><input id="c-file" class="vh" type="file" accept="image/*,.heic,.heif" multiple>';
+  h += '<p class="hint">Location data in the photo is removed. '+(n > 1 ? 'Up to 10 photos. The first one is the cover. ' : 'Add up to 10 photos. ')
+    + (!p.src ? '<a href="#" data-act="crop-existing">Reposition this photo</a>' : '')
+    + (K.sel > 0 ? (!p.src ? ' · ' : '')+'<a href="#" data-act="pic-cover">Make this the cover</a>' : '')+'</p>';
+  return h;
 }
 /* ---------- Photo framing: portrait 3:4 or landscape 4:3 (the two iPhone shapes), defaulting to the photo's own shape so it fits whole ---------- */
-function initCrop(img){ K.srcImg = img; K.frame = img.naturalHeight > img.naturalWidth ? 3 / 4 : 4 / 3; K.crop = {z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}; K.photoChanged = true; }
-function cropRect(){
-  const W = K.srcImg.naturalWidth, H = K.srcImg.naturalHeight, F = K.frame;
-  const bw = W / H > F ? H * F : W, bh = bw / F, cw = bw / K.crop.z, ch = bh / K.crop.z;
-  K.crop.cx = Math.min(W - cw / 2, Math.max(cw / 2, K.crop.cx)); K.crop.cy = Math.min(H - ch / 2, Math.max(ch / 2, K.crop.cy));
-  return {x:K.crop.cx - cw / 2, y:K.crop.cy - ch / 2, w:cw, h:ch};
+function addPic(img){
+  if (K.frame == null) K.frame = img.naturalHeight > img.naturalWidth ? 3 / 4 : 4 / 3;   /* the first photo sets the shape */
+  K.pics.push({key:newId(), src:img, url:img.src, crop:{z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}});
+}
+function cropRect(p){
+  p = p || curPic();
+  const W = p.src.naturalWidth, H = p.src.naturalHeight, F = K.frame;
+  const bw = W / H > F ? H * F : W, bh = bw / F, cw = bw / p.crop.z, ch = bh / p.crop.z;
+  p.crop.cx = Math.min(W - cw / 2, Math.max(cw / 2, p.crop.cx)); p.crop.cy = Math.min(H - ch / 2, Math.max(ch / 2, p.crop.cy));
+  return {x:p.crop.cx - cw / 2, y:p.crop.cy - ch / 2, w:cw, h:ch};
 }
 function drawCrop(){
-  const cv = $("#crop-cv"); if (!cv || !K || !K.srcImg) return;
-  const r = cropRect(), dpr = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth || 360;
+  const cv = $("#crop-cv"), p = curPic(); if (!cv || !p || !p.src) return;
+  const r = cropRect(p), dpr = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth || 360;
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(w * dpr / K.frame)){ cv.width = Math.round(w * dpr); cv.height = Math.round(w * dpr / K.frame); }
-  cv.getContext("2d").drawImage(K.srcImg, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+  cv.getContext("2d").drawImage(p.src, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
 }
-function cropTo(maxLong){
-  const r = cropRect(), maxW = K.frame >= 1 ? maxLong : maxLong * K.frame, w = Math.round(Math.min(maxW, r.w)), h = Math.round(w / K.frame), cv = document.createElement("canvas");
-  cv.width = w; cv.height = h; cv.getContext("2d").drawImage(K.srcImg, r.x, r.y, r.w, r.h, 0, 0, w, h); return cv;
+function cropTo(p, maxLong){
+  const r = cropRect(p), maxW = K.frame >= 1 ? maxLong : maxLong * K.frame, w = Math.round(Math.min(maxW, r.w)), h = Math.round(w / K.frame), cv = document.createElement("canvas");
+  cv.width = w; cv.height = h; cv.getContext("2d").drawImage(p.src, r.x, r.y, r.w, r.h, 0, 0, w, h); return cv;
 }
-async function finalizePhoto(){
-  if (!K.srcImg) return;
-  let thumb = cropTo(560).toDataURL("image/jpeg", 0.72);          /* re-encoding drops EXIF, including GPS */
-  if (thumb.length > 170000) thumb = cropTo(400).toDataURL("image/jpeg", 0.62);
-  K.thumb = thumb;
-  K.thumbBlob = await new Promise(res => cropTo(560).toBlob(res, "image/jpeg", 0.78));
-  K.full = await new Promise(res => cropTo(1600).toBlob(res, "image/jpeg", 0.85));
+/* re-encoding drops EXIF, including GPS */
+async function finalizePic(p){
+  return {thumb:await new Promise(res => cropTo(p, 560).toBlob(res, "image/jpeg", 0.78)), full:await new Promise(res => cropTo(p, 1600).toBlob(res, "image/jpeg", 0.85))};
+}
+/* an already-posted photo, loaded so it can be framed again */
+function loadExisting(p){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => { p.src = img; p.crop = {z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}; res(true); };
+    img.onerror = () => { if (img.src !== p.url && p.url) img.src = p.url; else res(false); };
+    img.crossOrigin = "anonymous"; img.src = p.photoUrl || p.url;
+  });
+}
+async function addFiles(files){
+  const room = MAX_PICS - K.pics.length, list = Array.from(files || []).slice(0, Math.max(0, room));
+  if (files && files.length > room) toast("You can add up to 10 photos.");
+  if (!list.length) return;
+  K.busy = true; renderComposer();
+  const first = K.pics.length;
+  for (const f of list){ try { const {img} = await loadImg(f); addPic(img); } catch(err) { photoError(err); } }
+  if (K.pics.length > first) K.sel = first;
+  K.busy = false; renderComposer();
 }
 function setupCrop(){
   const cv = $("#crop-cv"); if (!cv) return;
   drawCrop();
-  const zoomBy = f => { K.crop.z = Math.min(4, Math.max(1, K.crop.z * f)); const zi = $("#crop-z"); if (zi) zi.value = K.crop.z; drawCrop(); };
+  const zoomBy = f => { const p = curPic(); p.crop.z = Math.min(4, Math.max(1, p.crop.z * f)); const zi = $("#crop-z"); if (zi) zi.value = p.crop.z; drawCrop(); };
   const pts = new Map();
   cv.addEventListener("pointerdown", e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); try { cv.setPointerCapture(e.pointerId); } catch(err) {} });
   cv.addEventListener("pointermove", e => {
@@ -3165,7 +3259,7 @@ function setupCrop(){
       if (d0 > 0) zoomBy(Math.pow(d1 / d0, PINCH_GAIN));
     } else {
       const r = cropRect(), k = r.w / (cv.clientWidth || 1);
-      K.crop.cx -= (now.x - prev.x) * k; K.crop.cy -= (now.y - prev.y) * k; drawCrop();
+      const p = curPic(); p.crop.cx -= (now.x - prev.x) * k; p.crop.cy -= (now.y - prev.y) * k; drawCrop();
     }
     pts.set(e.pointerId, now);
   });
@@ -3174,31 +3268,37 @@ function setupCrop(){
 }
 async function saveEdit(){
   const m = findMeal(K.editId); if (!m){ closeSheet(); K = null; return; }
-  K.posting = true; renderComposer(); await finalizePhoto();
+  K.posting = true; renderComposer();
   const patch = {country:K.country, dish:K.dish === "__other" ? null : K.dish, custom:K.dish === "__other" ? K.custom.trim() : "", date:K.date || todayISO(),
     place:K.place.trim(), caption:K.caption.trim(), ratings:effRatings(), rating:overallOf(effRatings()) || K.legacy || 0, price:priceObj()};
-  const oldFiles = [m.photo_path, m.thumb_path], newFiles = [];
+  const oldFiles = mealFiles(m), newFiles = [], base = me + "/" + m.id + "-" + Date.now().toString(36), paths = [];
   try {
-    if (K.photoChanged && K.thumbBlob){
-      const base = me + "/" + m.id + "-" + Date.now().toString(36);
-      patch.thumb_path = await uploadPhoto(base + "-t.jpg", K.thumbBlob); newFiles.push(patch.thumb_path);
-      patch.photo_path = K.full ? await uploadPhoto(base + ".jpg", K.full) : null; if (patch.photo_path) newFiles.push(patch.photo_path);
-      patch.ratio = K.frame < 1 ? "3:4" : "4:3";
+    for (let i = 0; i < K.pics.length; i++){
+      const p = K.pics[i];
+      if (p.src){   /* new, or framed again */
+        const b = await finalizePic(p), bb = base + "-" + i;
+        const thumb_path = await uploadPhoto(bb + "-t.jpg", b.thumb); newFiles.push(thumb_path);
+        const photo_path = b.full ? await uploadPhoto(bb + ".jpg", b.full) : null; if (photo_path) newFiles.push(photo_path);
+        paths.push({photo_path, thumb_path});
+      } else paths.push({photo_path:p.photo_path || null, thumb_path:p.thumb_path || null});
     }
+    Object.assign(patch, photoCols(paths), {ratio:K.frame < 1 ? "3:4" : "4:3"});
     const {error} = await sb.from("meals").update(patch).eq("id", m.id);
     if (error) throw error;
   } catch(e){ removeFiles(newFiles); writeFailed(e); K.posting = false; renderComposer(); return; }
-  if (newFiles.length) removeFiles(oldFiles);
+  const keep = new Set(paths.flatMap(p => [p.photo_path, p.thumb_path]));
+  removeFiles(oldFiles.filter(f => !keep.has(f)));
   await refresh();
   closeSheet(); K = null; toast("Meal updated.");
 }
 async function postMeal(){
   if (K.editId) return saveEdit();
-  K.posting = true; renderComposer(); await finalizePhoto();
+  K.posting = true; renderComposer();
+  const pics = []; for (const p of K.pics) pics.push(await finalizePic(p));
   const m = {uid:me, dish:K.dish === "__other" ? null : K.dish, custom:K.dish === "__other" ? K.custom.trim() : "", country:K.country, date:K.date || todayISO(),
     place:K.place.trim(), caption:K.caption.trim(), ratings:effRatings(), rating:overallOf(effRatings()), price:priceObj(), ratio:K.frame < 1 ? "3:4" : "4:3", likes:{}, created:new Date().toISOString()};
   const wasNew = m.dish && !triedMap(me)[m.dish];
-  const ok = await addMeal(m, {thumb:K.thumbBlob, full:K.full}, wasNew);
+  const ok = await addMeal(m, pics, wasNew);
   if (!ok){ K.posting = false; renderComposer(); return; }
   if (ok === true) announceMeal(m, wasNew);
   closeSheet(); K = null;
@@ -3276,12 +3376,18 @@ document.addEventListener("click", e => {
     case "del-ask": openSheet('<div class="stack"><h2 style="font-size:20px">Delete this meal?</h2><p class="hint">It comes out of your passport and your friends\' feed. This can\'t be undone.</p><div class="row-btns"><button class="btn" data-act="close">Keep it</button><button class="btn primary" data-act="del" data-id="'+esc(id)+'" style="background:var(--stamp);border-color:var(--stamp)">Delete</button></div></div>'); break;
     case "del": { const m = findMeal(id); closeSheet(); if (m){ deleteMeal(m); toast("Meal deleted."); } break; }
     case "log": openComposer(id || (cur().v === "dish" ? cur().id : "")); break;
-    case "pick-again": $("#c-file").click(); break;
-    case "frame": if (K && K.srcImg){ K.frame = id === "p" ? 3 / 4 : 4 / 3; K.crop.z = 1; K.crop.cx = K.srcImg.naturalWidth / 2; K.crop.cy = K.srcImg.naturalHeight / 2; renderComposer(); } break;
-    case "crop-existing": if (K && K.thumb){ const img = new Image(); K.busy = true;
-        img.onload = () => { K.busy = false; initCrop(img); renderComposer(); };
-        img.onerror = () => { if (img.src !== K.thumb) img.src = K.thumb; else { K.busy = false; toast("That photo couldn't be loaded for repositioning."); } };
-        img.crossOrigin = "anonymous"; img.src = K.photoUrl || K.thumb; } break;
+    case "pic-sel": if (K && K.pics[+id]){ K.sel = +id; renderComposer(); } break;
+    case "pic-del": if (K && K.pics[+id]){ K.pics.splice(+id, 1); if (!K.pics.length && !K.editId) K.frame = null; K.sel = Math.min(K.sel, Math.max(0, K.pics.length - 1)); renderComposer(); } break;
+    case "pic-cover": if (K && K.sel > 0){ const [p] = K.pics.splice(K.sel, 1); K.pics.unshift(p); K.sel = 0; renderComposer(); } break;
+    case "car": { const tr = t.closest(".car") && t.closest(".car").querySelector(".car-track"); if (tr) tr.scrollBy({left:(+id) * tr.clientWidth, behavior:"smooth"}); break; }
+    case "frame": if (K && K.pics.length){
+        /* one shape for all photos; ones already posted are loaded again so they can be reframed */
+        K.frame = id === "p" ? 3 / 4 : 4 / 3;
+        const old = K.pics.filter(p => !p.src);
+        K.pics.forEach(p => { if (p.src) p.crop = {z:1, cx:p.src.naturalWidth / 2, cy:p.src.naturalHeight / 2}; });
+        if (old.length){ K.busy = true; Promise.all(old.map(loadExisting)).then(ok => { K.busy = false; if (ok.includes(false)) toast("That photo couldn't be loaded for repositioning."); renderComposer(); }); }
+        renderComposer(); } break;
+    case "crop-existing": { const p = curPic(); if (K && p && !p.src){ K.busy = true; loadExisting(p).then(ok => { K.busy = false; if (!ok) toast("That photo couldn't be loaded for repositioning."); renderComposer(); }); } break; }
     case "post-meal": if (K && !K.posting) postMeal(); break;
     case "edit-meal": openEditor(findMeal(id)); break;
     case "rate": if (K){ const [k, v] = id.split(":"), n = +v; K.ratings[k] = K.ratings[k] === n ? 0 : n; renderComposer(); } break;
@@ -3289,12 +3395,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", async e => {
   const t = e.target;
-  if (t.id === "c-file" && t.files && t.files[0]){
-    K.busy = true; renderComposer();
-    try { const {img} = await loadImg(t.files[0]); initCrop(img); K.thumb = null; K.full = null; }
-    catch(err){ photoError(err); }
-    K.busy = false; renderComposer();
-  }
+  if (t.id === "c-file" && t.files && t.files.length){ const fs = Array.from(t.files); t.value = ""; await addFiles(fs); }
   else if (t.id === "pp-file" && t.files && t.files[0]){
     try { const blob = await squarePhoto(t.files[0]); if (await setAvatar(blob)) toast("Profile picture updated."); }
     catch(err){ photoError(err); }
@@ -3311,9 +3412,9 @@ document.addEventListener("input", e => {
   else if (!K) return;
   else if (t.id === "c-caption") K.caption = t.value;
   else if (t.id === "c-place") K.place = t.value;
-  else if (t.id === "crop-z" && K.srcImg){ K.crop.z = +t.value; drawCrop(); }
+  else if (t.id === "crop-z" && curPic() && curPic().src){ curPic().crop.z = +t.value; drawCrop(); }
   else if (t.id === "c-price"){ const had = hasPrice(); K.price = t.value; if (had !== hasPrice()){ renderComposer(); const el = $("#c-price"); if (el) el.focus(); } }
-  else if (t.id === "c-other"){ K.custom = t.value; $("#c-post").disabled = !(K.thumb && K.country && K.custom.trim()); }
+  else if (t.id === "c-other"){ K.custom = t.value; $("#c-post").disabled = !(K.pics.length && K.country && K.custom.trim()); }
 });
 document.addEventListener("submit", e => { if (e.target && e.target.id === "auth-form"){ e.preventDefault(); if (!authBusy) submitAuth(); } });
 document.addEventListener("keydown", e => {
@@ -3328,6 +3429,21 @@ document.addEventListener("keydown", e => {
     if (sib && sib.tagName === "BUTTON") sib.focus(); else if (e.key === "ArrowUp") $("#mq").focus();
   } if (e.key === "Escape" && !$("#sheet-wrap").hidden) closeSheet(); });
 
+document.addEventListener("scroll", e => {
+  const tr = e.target; if (!tr || !tr.classList || !tr.classList.contains("car-track")) return;
+  const car = tr.parentElement, n = tr.children.length, i = Math.max(0, Math.min(n - 1, Math.round(tr.scrollLeft / (tr.clientWidth || 1))));
+  if (car._i === i) return; car._i = i;
+  const b = car.querySelector(".car-n b"); if (b) b.textContent = i + 1;
+  car.querySelectorAll(".car-dots i").forEach((d, k) => d.classList.toggle("on", k === i));
+  const pv = car.querySelector(".car-arr.prev"), nx = car.querySelector(".car-arr.next"); if (pv) pv.hidden = i === 0; if (nx) nx.hidden = i === n - 1;
+}, true);
+const _renderCar = render;
+render = function(){
+  const pos = {}; document.querySelectorAll("#view .car-track[data-mid]").forEach(t => { if (t.scrollLeft) pos[t.dataset.mid] = t.scrollLeft; });
+  const r = _renderCar.apply(this, arguments);
+  Object.keys(pos).forEach(id => document.querySelectorAll("#view .car-track").forEach(t => { if (t.dataset.mid === id) t.scrollLeft = pos[id]; }));
+  return r;
+};
 /* names in the chosen language, so lists, search and the share image use them */
 (function localizeData(){
   if (!I18N) return;
