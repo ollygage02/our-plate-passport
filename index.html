@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=5"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=7"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -3182,14 +3182,32 @@ function viewUserCountry(uid, code){
           + (when ? (isDrink(d.id) ? 'Drunk ' : 'Eaten ')+fmtDate(when)+(best ? ' · '+best.toFixed(1)+' ★' : '')+(dm.length > 1 ? ' · '+dm.length+' times' : '') : 'Not yet')+'</small></span>'
           + (when ? '<span class="tick">'+(isDrink(d.id) ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(when).slice(0,6)+'</span>' : '<span class="todo">—</span>')+(canPick(d) ? '</button>' : '</div>'); }).join("")
     + '</div>';
-  if (c.dishes.some(canPick)) h = h.replace('<div class="d-list">', '<p class="hint uc-tip">Tap a dish '+(uid === me ? 'you\'ve' : 'they\'ve')+' had to find its photo below.</p><div class="d-list">');
+  const others = otherMeals(ms, c);
+  if (others.length) h += '<div class="section-h"><h2>Other meals</h2><span>'+others.length+'</span></div><div class="d-list">'
+    + others.map(o => '<button class="d-row static dpick'+(hl === o.key ? ' sel' : '')+'" data-act="uc-hl" data-id="'+esc(o.key)+'" aria-pressed="'+(hl === o.key)+'"><span class="em">'+o.emoji+'</span><span class="t"><b>'+esc(o.name)+'</b><small>'
+        + (o.drink ? 'Drunk ' : 'Eaten ')+fmtDate(o.first)+(o.best ? ' · '+o.best.toFixed(1)+' ★' : '')+(o.n > 1 ? ' · '+o.n+' times' : '')+'</small></span>'
+        + '<span class="tick">'+(o.drink ? 'DRUNK' : 'EATEN')+'<br>'+stampDate(o.first).slice(0,6)+'</span></button>').join("")
+    + '</div>';
+  if (c.dishes.some(canPick) || others.length) h = h.replace('<div class="d-list">', '<p class="hint uc-tip">Tap a dish '+(uid === me ? 'you\'ve' : 'they\'ve')+' had to find its photo below.</p><div class="d-list">');
   h += '<div class="section-h"><h2>Photos</h2><span>'+ms.length+'</span></div>';
   if (uid === me) h = h.replace('<div class="section-h"><h2>Must-try list</h2>', '<button class="btn" data-act="country" data-id="'+code+'" style="align-self:flex-start">Open the '+esc(c.name)+' page'+(GUIDES[code] ? ' and guide' : '')+'</button><div class="section-h"><h2>Must-try list</h2>');
-  h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile'+(hl ? (m.dish === hl ? ' hl' : ' dim') : '')+'" data-act="post" data-id="'+esc(m.id)+'" data-dish="'+esc(m.dish || '')+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
+  h += ms.length ? '<div class="gal">'+ms.map(m => '<button class="tile'+(hl ? (m.dish === hl ? ' hl' : ' dim') : '')+'" data-act="post" data-id="'+esc(m.id)+'" data-dish="'+esc(mealKey(m, c))+'" aria-label="'+esc(dishName(m))+'">'+photoHTML(m, false)+'</button>').join("")+'</div>'
     : '<p class="hint">No photos from '+esc(c.name)+' yet.</p>';
   return h + '</div>';
 }
 
+/* which row a meal belongs to: its must-try, or (for anything else) what it was called */
+const mealKey = (m, c) => m.dish && c.dishes.some(d => d.id === m.dish) ? m.dish : m.dish && D[m.dish] ? m.dish : "x:" + (m.custom || "Meal").trim().toLowerCase();
+function otherMeals(ms, c){
+  const g = {};
+  ms.forEach(m => {
+    const k = mealKey(m, c); if (c.dishes.some(d => d.id === k)) return;
+    const o = g[k] = g[k] || {key:k, name:m.dish && D[m.dish] ? D[m.dish].name : (m.custom || "Meal").trim(), emoji:m.dish && D[m.dish] ? D[m.dish].emoji : "🍽️", drink:!!(m.dish && isDrink(m.dish)), n:0, best:0, first:m.date};
+    o.n++; o.best = Math.max(o.best, +m.rating || 0);
+    if ((m.date || "") < (o.first || "9")){ o.first = m.date; if (!m.dish) o.name = (m.custom || "Meal").trim(); }   /* named as first logged */
+  });
+  return Object.values(g).sort((a, b) => (a.first || "").localeCompare(b.first || ""));
+}
 /* tapping a dish on someone's country page rings its photos */
 function applyUcHl(scroll){
   const hl = cur().hl || null; let first = null;
