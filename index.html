@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=8"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=9"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -751,8 +751,11 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .bio{margin:2px 0 5px;font-size:14px;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere;color:var(--fg)}
 .bio-edit,.bio-add{font-size:13px;font-weight:600;color:var(--accent);white-space:nowrap}
 .bio-add{display:inline-block;margin:2px 0 4px}
-.bio-form .field{position:relative;flex:1 1 100%}
-.bio-form textarea{min-height:76px;resize:vertical}
+.bio-field{position:relative}
+.bio-field textarea{min-height:76px;resize:vertical}
+.set-prof{display:flex;flex-direction:column;gap:14px}
+.set-prof #save-profile{align-self:flex-start}
+.prof-photo{display:flex;align-items:center;gap:14px}
 .bio-n{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none}
 .av-zoom-b{display:block;border-radius:50%;cursor:zoom-in}
 .avz{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(10,14,12,0);backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0);transition:background .22s ease,backdrop-filter .22s ease;cursor:zoom-out}
@@ -1791,13 +1794,13 @@ function groupsHTML(){
 /* ---------- Settings ---------- */
 function viewSettings(){
   let h = '<div class="stack">';
+  h += profileHTML();
   if (typeof notifHTML === "function") h += notifHTML();
   h += groupsHTML();
   h += currencyHTML();
   h += '<div class="section-h"><h2>Language</h2></div><section class="guide set-lang"><p class="hint">Choose the language for the app on this phone. Captions, places and names stay as people wrote them.</p>'+langPicker()+'</section>';
   h += '<div class="section-h"><h2>Your account</h2></div><section class="guide set-acc">'
     + '<div class="set-row">'+avatar(me)+'<span class="t"><b>'+esc(nameOf(me))+'</b><small>'+esc(myEmail)+'</small></span></div>'
-    + '<p class="hint">Change your name and profile photo at the top of your Passport.</p>'
     + '<div class="row-btns"><button class="btn sm" data-act="set-pass">Change password</button><button class="btn sm" data-act="sign-out">Sign out</button></div></section>';
   return h + '</div>';
 }
@@ -2895,16 +2898,33 @@ const BIO_MAX = 150;
 /* the short description under a passport's name: shown as written, never translated */
 function bioHTML(uid){
   const isMe = uid === me, bio = (PEOPLE[uid] && PEOPLE[uid].bio || "").trim(), can = isMe && canWrite() && mode === "shared";
-  if (can && editingBio) return '';
-  if (bio) return '<p class="bio"><span data-notr>'+esc(bio)+'</span>'+(can ? ' <a href="#" class="bio-edit" data-act="edit-bio">Edit bio</a>' : '')+'</p>';
-  return can ? '<a href="#" class="bio-add" data-act="edit-bio">+ Add a short bio</a>' : '';
+  return bio ? '<p class="bio" data-notr>'+esc(bio)+'</p>' : '';
 }
-function bioFormHTML(uid){
-  const bio = (PEOPLE[uid] && PEOPLE[uid].bio || "").trim();
-  if (!(uid === me && canWrite() && mode === "shared" && editingBio)) return '';
-  return '<div class="inline-form bio-form"><div class="field"><label class="label" for="bio">Bio</label><textarea id="bio" maxlength="'+BIO_MAX+'" rows="3" placeholder="A line about you and food: favourite cuisine, next trip, what you always order…">'+esc(bio)+'</textarea><span class="bio-n mono" id="bio-n">'+bio.length+'/'+BIO_MAX+'</span></div>'
-    + '<button class="btn primary" data-act="save-bio">Save</button><button class="btn" data-act="cancel-bio">Cancel</button></div>';
+/* Settings › Your profile: picture, name and bio, saved together */
+function profileHTML(){
+  if (!canWrite() || mode !== "shared") return '';
+  const p = PEOPLE[me] || {}, has = ownUrl(p.photo), bio = (p.bio || "").trim();
+  return '<div class="section-h"><h2>Your profile</h2></div><section class="guide set-prof">'
+    + '<div class="prof-photo"><label class="pp" for="pp-file" title="Change profile picture">'+avatar(me, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">'
+    + '<div class="row-btns"><label class="btn sm" for="pp-file" role="button">'+(has ? 'Change photo' : 'Add a profile photo')+'</label>'+(has ? '<button class="btn sm" data-act="pp-remove">Remove</button>' : '')+'</div></div>'
+    + '<div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc(p.nick || "")+'"></div>'
+    + '<div class="field bio-field"><label class="label" for="bio">Bio</label><textarea id="bio" maxlength="'+BIO_MAX+'" rows="3" placeholder="A line about you and food: favourite cuisine, next trip, what you always order…">'+esc(bio)+'</textarea><span class="bio-n mono" id="bio-n">'+bio.length+'/'+BIO_MAX+'</span></div>'
+    + '<button class="btn primary" id="save-profile" data-act="save-profile" disabled>Save</button></section>';
 }
+const profVals = () => ({nick:(($("#nick") || {}).value || "").trim().slice(0, 30), bio:(($("#bio") || {}).value || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, BIO_MAX)});
+function profDirty(){
+  const b = $("#save-profile"); if (!b) return;
+  const v = profVals(), p = PEOPLE[me] || {};
+  b.disabled = v.nick === (p.nick || "") && v.bio === (p.bio || "").trim();
+}
+document.addEventListener("input", e => { if (e.target && (e.target.id === "nick" || e.target.id === "bio") && $("#save-profile")){ e.target.dataset.dirty = "1"; profDirty(); } });
+document.addEventListener("click", e => {
+  if (!(e.target.closest && e.target.closest('[data-act="save-profile"]'))) return;
+  const v = profVals(), p = PEOPLE[me] || {}, nickChanged = v.nick !== (p.nick || "");
+  ["nick", "bio"].forEach(id => { const el = $("#" + id); if (el) delete el.dataset.dirty; });
+  setPerson({nick:v.nick, bio:v.bio});
+  toast(nickChanged ? (v.nick ? "Friends now see you as " + v.nick + "." : "Friends now see your account name.") : "Profile saved.");
+});
 document.addEventListener("input", e => { if (e.target && e.target.id === "bio"){ const n = $("#bio-n"); if (n) n.textContent = e.target.value.length + "/" + BIO_MAX; } });
 let mapView = null, mapCtl = null, editingNick = false, mapHl = null, mapNameCache = null;
 function largestBox(p, svg){
@@ -3152,11 +3172,8 @@ function viewStamps(uid){
 }
 function viewUser(uid){
   const isMe = uid === me, st = statsFor(uid), ms = mealsOf(uid);
-  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : (ownUrl(PEOPLE[uid] && PEOPLE[uid].photo) ? '<button class="av-zoom-b" data-act="av-zoom" data-id="'+esc(uid)+'" aria-label="Show profile picture">'+avatar(uid, "lg")+'</button>' : avatar(uid, "lg")))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+bioHTML(uid)+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
-     + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
+  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+((ownUrl(PEOPLE[uid] && PEOPLE[uid].photo) ? '<button class="av-zoom-b" data-act="av-zoom" data-id="'+esc(uid)+'" aria-label="Show profile picture">'+avatar(uid, "lg")+'</button>' : avatar(uid, "lg")))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+bioHTML(uid)+'</div></div>';
   h = h.replace(/<\/div><\/div>$/, '</div>'+stampsBadge(uid)+'</div>');   /* stamps sit to the right of the name */
-  h += bioFormHTML(uid);
-  if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
   h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>' + wrapCard(uid);
   h += mapHTML(uid);
   /* Meals: one compact card per country (must-try progress + that country's photos), or every photo as a grid */
@@ -3651,6 +3668,15 @@ document.addEventListener("scroll", e => {
   car.querySelectorAll(".car-dots i").forEach((d, k) => d.classList.toggle("on", k === i));
   const pv = car.querySelector(".car-arr.prev"), nx = car.querySelector(".car-arr.next"); if (pv) pv.hidden = i === 0; if (nx) nx.hidden = i === n - 1;
 }, true);
+const _renderProf = render;
+render = function(){
+  const keep = ["nick", "bio"].map(id => { const el = $("#" + id); return el && el.dataset.dirty ? {id, v:el.value, f:document.activeElement === el, s:el.selectionStart} : null; }).filter(Boolean);
+  const r = _renderProf.apply(this, arguments);
+  keep.forEach(k => { const el = $("#" + k.id); if (!el) return; el.value = k.v; el.dataset.dirty = "1"; if (k.f){ el.focus({preventScroll:true}); try { el.setSelectionRange(k.s, k.s); } catch(e) {} } });
+  if (keep.length){ const n = $("#bio-n"), b = $("#bio"); if (n && b) n.textContent = b.value.length + "/" + BIO_MAX; }
+  profDirty();
+  return r;
+};
 const _renderFx = render;
 render = function(){ const r = _renderFx.apply(this, arguments); fxFill(); return r; };
 const _openSheetFx = openSheet;
