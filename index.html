@@ -748,9 +748,9 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
 .lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
-.bio{margin:-6px 0 0;font-size:14.5px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+.bio{margin:2px 0 5px;font-size:14px;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere;color:var(--fg)}
 .bio-edit,.bio-add{font-size:13px;font-weight:600;color:var(--accent);white-space:nowrap}
-.bio-add{display:inline-block;margin-top:-6px;align-self:flex-start}
+.bio-add{display:inline-block;margin:2px 0 4px}
 .bio-form .field{position:relative;flex:1 1 100%}
 .bio-form textarea{min-height:76px;resize:vertical}
 .bio-n{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none}
@@ -2895,10 +2895,15 @@ const BIO_MAX = 150;
 /* the short description under a passport's name: shown as written, never translated */
 function bioHTML(uid){
   const isMe = uid === me, bio = (PEOPLE[uid] && PEOPLE[uid].bio || "").trim(), can = isMe && canWrite() && mode === "shared";
-  if (can && editingBio) return '<div class="inline-form bio-form"><div class="field"><label class="label" for="bio">Bio</label><textarea id="bio" maxlength="'+BIO_MAX+'" rows="3" placeholder="A line about you and food: favourite cuisine, next trip, what you always order…">'+esc(bio)+'</textarea><span class="bio-n mono" id="bio-n">'+bio.length+'/'+BIO_MAX+'</span></div>'
-    + '<button class="btn primary" data-act="save-bio">Save</button><button class="btn" data-act="cancel-bio">Cancel</button></div>';
+  if (can && editingBio) return '';
   if (bio) return '<p class="bio"><span data-notr>'+esc(bio)+'</span>'+(can ? ' <a href="#" class="bio-edit" data-act="edit-bio">Edit bio</a>' : '')+'</p>';
   return can ? '<a href="#" class="bio-add" data-act="edit-bio">+ Add a short bio</a>' : '';
+}
+function bioFormHTML(uid){
+  const bio = (PEOPLE[uid] && PEOPLE[uid].bio || "").trim();
+  if (!(uid === me && canWrite() && mode === "shared" && editingBio)) return '';
+  return '<div class="inline-form bio-form"><div class="field"><label class="label" for="bio">Bio</label><textarea id="bio" maxlength="'+BIO_MAX+'" rows="3" placeholder="A line about you and food: favourite cuisine, next trip, what you always order…">'+esc(bio)+'</textarea><span class="bio-n mono" id="bio-n">'+bio.length+'/'+BIO_MAX+'</span></div>'
+    + '<button class="btn primary" data-act="save-bio">Save</button><button class="btn" data-act="cancel-bio">Cancel</button></div>';
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "bio"){ const n = $("#bio-n"); if (n) n.textContent = e.target.value.length + "/" + BIO_MAX; } });
 let mapView = null, mapCtl = null, editingNick = false, mapHl = null, mapNameCache = null;
@@ -3147,10 +3152,10 @@ function viewStamps(uid){
 }
 function viewUser(uid){
   const isMe = uid === me, st = statsFor(uid), ms = mealsOf(uid);
-  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : (ownUrl(PEOPLE[uid] && PEOPLE[uid].photo) ? '<button class="av-zoom-b" data-act="av-zoom" data-id="'+esc(uid)+'" aria-label="Show profile picture">'+avatar(uid, "lg")+'</button>' : avatar(uid, "lg")))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
+  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : (ownUrl(PEOPLE[uid] && PEOPLE[uid].photo) ? '<button class="av-zoom-b" data-act="av-zoom" data-id="'+esc(uid)+'" aria-label="Show profile picture">'+avatar(uid, "lg")+'</button>' : avatar(uid, "lg")))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+bioHTML(uid)+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
      + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
   h = h.replace(/<\/div><\/div>$/, '</div>'+stampsBadge(uid)+'</div>');   /* stamps sit to the right of the name */
-  h += bioHTML(uid);
+  h += bioFormHTML(uid);
   if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
   h += '<div class="stats"><div><b>'+st.countries+'</b><span>Countries</span></div><div><b>'+st.dishes+'</b><span>Must-trys</span></div><div><b>'+st.photos+'</b><span>Photos</span></div></div>' + wrapCard(uid);
   h += mapHTML(uid);
