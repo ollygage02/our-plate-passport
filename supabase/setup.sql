@@ -353,3 +353,8 @@ create policy "admins remove, members leave" on public.group_members for delete 
 alter table public.meals add column if not exists extra_photos jsonb not null default '[]'::jsonb;
 alter table public.meals drop constraint if exists meals_extra_photos_max;
 alter table public.meals add constraint meals_extra_photos_max check (jsonb_typeof(extra_photos) = 'array' and jsonb_array_length(extra_photos) <= 9);
+
+-- ---------- Home currency (prices converted for each person) ----------
+alter table public.profiles add column if not exists home_currency text;
+alter table public.profiles drop constraint if exists profiles_home_currency_code;
+alter table public.profiles add constraint profiles_home_currency_code check (home_currency is null or home_currency ~ '^[A-Z]{3}$');

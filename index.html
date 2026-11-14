@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=2"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=3"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -748,6 +748,8 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
 .lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
+.fx{font-size:12.5px;color:var(--muted);text-align:right;margin:-2px 0 8px}
+.c-fx{text-align:left;margin:-6px 0 0}
 .car{position:relative}
 .car-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .car-track::-webkit-scrollbar{display:none}
@@ -1553,7 +1555,7 @@ function applyRows(d){
     ratings:r.ratings || {}, rating:+r.rating || 0, price:r.price, ratio:r.ratio, photo_path:r.photo_path, thumb_path:r.thumb_path,
     photo:pubUrl(r.photo_path), thumb:pubUrl(r.thumb_path || r.photo_path), photos:mealPhotos(r), likes:likes[r.id] || {}, created:r.created_at}));
   PEOPLE = {};
-  d.p.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path, email:(r.email || "").toLowerCase()}; });
+  d.p.forEach(r => { PEOPLE[r.id] = {nick:r.nick || "", notify:r.notify || null, home:r.home_currency || null, saved:r.saved || [], photo:pubUrl(r.photo_path), photo_path:r.photo_path, email:(r.email || "").toLowerCase()}; });
   if (d.g && d.gm){
     GROUPS = d.g.map(x => ({id:x.id, name:x.name, created_by:x.created_by, members:d.gm.filter(y => y.group_id === x.id)
       .sort((a, b) => (b.role === "admin") - (a.role === "admin") || a.added_at.localeCompare(b.added_at))})).filter(x => x.members.some(y => y.email === myEmail))
@@ -1775,6 +1777,7 @@ function viewSettings(){
   let h = '<div class="stack">';
   if (typeof notifHTML === "function") h += notifHTML();
   h += groupsHTML();
+  h += currencyHTML();
   h += '<div class="section-h"><h2>Language</h2></div><section class="guide set-lang"><p class="hint">Choose the language for the app on this phone. Captions, places and names stay as people wrote them.</p>'+langPicker()+'</section>';
   h += '<div class="section-h"><h2>Your account</h2></div><section class="guide set-acc">'
     + '<div class="set-row">'+avatar(me)+'<span class="t"><b>'+esc(nameOf(me))+'</b><small>'+esc(myEmail)+'</small></span></div>'
@@ -2560,7 +2563,7 @@ function postCard(m){
        : (m.dish && D[m.dish] ? '<button style="display:block;width:100%" data-act="dish" data-id="'+m.dish+'">'+photoHTML(m, true)+'</button>' : photoHTML(m, true)))
    + '<div class="post-b"><div class="acts">'
    + '<button class="act'+(liked ? ' liked' : '')+'" data-act="like" data-id="'+esc(m.id)+'" aria-pressed="'+liked+'" aria-label="Like"'+(canWrite() ? '' : ' disabled')+'>'+I.heart+'<span class="mono">'+likeCount(m)+'</span></button>'
-   + '<span class="date">'+(priceText(m.price) ? esc(priceText(m.price))+' · ' : '')+fmtDate(m.date)+'</span></div>'
+   + '<span class="date">'+(priceText(m.price) ? esc(priceText(m.price))+' · ' : '')+fmtDate(m.date)+'</span></div>' + fxHTML(m.price, m.date)
    + '<p>'+(m.dish && D[m.dish] ? '<a href="#" class="dish-link" data-act="dish" data-id="'+m.dish+'">'+esc(D[m.dish].name)+'</a>' : '<span class="dish-link">'+esc(m.custom)+'</span>')
    + (c.code ? ' <span class="where">in <a href="#" data-act="country" data-id="'+c.code+'">'+c.flag+' '+esc(c.name)+'</a></span>' : '')+'</p>'
    + (+m.rating ? '<div class="rate-line">'+starsHTML(Math.round(+m.rating))+'<b class="mono">'+(+m.rating).toFixed(1)+'</b><span class="hint">'+esc(RATING_WORDS[Math.round(+m.rating)] || '')+'</span>'
@@ -3137,6 +3140,82 @@ const CUR = {GB:"GBP",IE:"EUR",FR:"EUR",DE:"EUR",IT:"EUR",ES:"EUR",PT:"EUR",GR:"
   CN:"CNY",TW:"TWD",KH:"USD",NZ:"NZD",
   PH:"PHP",ID:"IDR",LK:"LKR",
   KR:"KRW",MY:"MYR",SG:"SGD",LA:"LAK",NP:"NPR",MM:"MMK",AE:"AED",JO:"JOD"};
+/* ---------- Your currency ----------
+   Everyone picks a home currency in Settings. A price paid in another currency gets "≈ £x" underneath, converted at
+   the rate published on the day of the meal (or the most recent one before it). Daily rates come from the free
+   currency-api by fawazahmed0 (jsDelivr, with a pages.dev mirror); each day's table is kept on the phone. */
+const FX_KEY = "opp-fx-v1", FX_MIN = "2024-03-02";
+const FX_CODES = Array.from(new Set(Object.values(CUR).concat(["GBP","EUR","USD","CNY","HKD","TWD","JPY","KRW","SGD","AUD","NZD","CAD","CHF","SEK","NOK","DKK","PLN","CZK","HUF","INR","MXN","BRL","ZAR","THB","AED"]))).sort();
+let FX = {}; try { FX = JSON.parse(localStorage.getItem(FX_KEY) || "{}") || {}; } catch(e) { FX = {}; }
+const fxBusy = {};
+function fxSave(){ try { const ks = Object.keys(FX).sort(); while (ks.length > 500) delete FX[ks.shift()]; localStorage.setItem(FX_KEY, JSON.stringify(FX)); } catch(e) {} }
+function guessHome(){
+  const loc = (navigator.languages && navigator.languages[0]) || navigator.language || "", reg = (loc.split("-")[1] || "").toUpperCase();
+  return (reg && CUR[reg]) || ({zh:"CNY", es:"EUR"})[loc.slice(0, 2).toLowerCase()] || "GBP";
+}
+function homeCur(){
+  const p = me && PEOPLE[me]; if (p && p.home && FX_CODES.includes(p.home)) return p.home;
+  let l = null; try { l = localStorage.getItem("opp-home-cur"); } catch(e) {}
+  return l && FX_CODES.includes(l) ? l : guessHome();
+}
+const dayBefore = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+function fxLoad(date){
+  if (fxBusy[date]) return fxBusy[date];
+  return fxBusy[date] = (async () => {
+    const today = todayISO(), want = date > today ? today : date, urls = [];
+    /* that day, or the day or two before if it's missing; failing that, the latest */
+    (want < FX_MIN ? [] : [want, dayBefore(want, 1), dayBefore(want, 2)]).forEach(d => urls.push(
+      "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@" + d + "/v1/currencies/eur.min.json", "https://" + d + ".currency-api.pages.dev/v1/currencies/eur.min.json"));
+    urls.push("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.min.json", "https://latest.currency-api.pages.dev/v1/currencies/eur.min.json");
+    for (const u of urls){
+      try {
+        const res = await fetch(u); if (!res.ok) continue;
+        const j = await res.json(); if (!j || !j.eur) continue;
+        const r = {EUR:1}; FX_CODES.forEach(c => { const v = +j.eur[c.toLowerCase()]; if (v > 0) r[c] = v; });
+        FX[date] = {d:j.date || want, r, t:Date.now()}; fxSave(); return FX[date];
+      } catch(e) { if (navigator.onLine === false) break; }
+    }
+    return null;
+  })().finally(() => { delete fxBusy[date]; });
+}
+/* the rates for a day: from the phone if we have them, otherwise fetched (and the page filled in once they arrive) */
+function fxFor(date){
+  const f = FX[date], stale = f && f.d < date && Date.now() - f.t > 6 * 3600e3;   /* today's rate may not be out yet */
+  if (!f || stale) fxLoad(date).then(x => { if (x) fxFill(); });
+  return f || null;
+}
+function fxText(amount, from, date){
+  const to = homeCur(); if (!(+amount > 0) || !from || from === to) return "";
+  const f = fxFor(date || todayISO()); if (!f) return null;
+  if (!f.r[from] || !f.r[to]) return "";
+  return "≈ " + priceText({amount:+amount / f.r[from] * f.r[to], cur:to}) + " · rate on " + fmtDate(f.d);
+}
+const fxHTML = (pr, date, cls) => pr && +pr.amount > 0 && pr.cur && pr.cur !== homeCur()
+  ? '<p class="fx'+(cls ? ' ' + cls : '')+'" data-fx-a="'+esc(pr.amount)+'" data-fx-c="'+esc(pr.cur)+'" data-fx-d="'+esc(date || "")+'" hidden></p>' : '';
+function fxFill(){
+  document.querySelectorAll("[data-fx-c]").forEach(el => {
+    const t = fxText(el.dataset.fxA, el.dataset.fxC, el.dataset.fxD); if (t === null) return;
+    if (el.dataset.fxT !== t){ el.dataset.fxT = t; el.textContent = t; }
+    el.hidden = !t;
+  });
+}
+function fxComposer(){ const el = $("#c-fx"); if (!el || !K) return; el.dataset.fxA = K.price || ""; el.dataset.fxC = K.cur || ""; el.dataset.fxD = K.date || ""; fxFill(); }
+function currencyHTML(){
+  const home = homeCur();
+  let dn = null; try { dn = new Intl.DisplayNames([LANG === "zh" ? "zh-Hans" : LANG], {type:"currency"}); } catch(e) {}
+  const name = c => { try { return dn ? dn.of(c) : c; } catch(e) { return c; } };
+  const opts = FX_CODES.slice().sort((a, b) => name(a).localeCompare(name(b), LANG === "zh" ? "zh-Hans-u-co-pinyin" : LANG));
+  return '<div class="section-h"><h2>Your currency</h2></div><section class="guide set-cur"><p class="hint">Prices paid in other currencies also show what they come to in yours, at the exchange rate on the day of the meal.</p>'
+    + '<div class="field"><label class="label" for="home-cur">Show prices in</label><select id="home-cur" data-notr>'+opts.map(c => '<option value="'+c+'"'+(c === home ? ' selected' : '')+'>'+esc(name(c))+' ('+c+')</option>').join("")+'</select></div></section>';
+}
+async function setHomeCur(c){
+  if (!FX_CODES.includes(c)) return;
+  try { localStorage.setItem("opp-home-cur", c); } catch(e) {}
+  if (me){ (PEOPLE[me] = PEOPLE[me] || {nick:"", saved:[]}).home = c; }
+  render(); toast("Prices will now also show in " + c + ".");
+  if (sb && me){ const {error} = await sb.from("profiles").update({home_currency:c}).eq("id", me); if (error) writeFailed(error); }
+}
+document.addEventListener("change", e => { if (e.target && e.target.id === "home-cur") setHomeCur(e.target.value); });
 const curOptions = (country, current) => Array.from(new Set([CUR[country] || "EUR", current, "GBP", "EUR", "USD"].filter(Boolean)));
 const hasPrice = () => K && +K.price > 0;
 const effRatings = () => Object.assign({}, K.ratings, hasPrice() ? {} : {value:0});
@@ -3168,6 +3247,7 @@ function renderComposer(){
    + '<div class="field"><label class="label" for="c-place">Where? (optional)</label><input id="c-place" type="text" maxlength="80" list="c-places" placeholder="Restaurant, market stall, someone\'s kitchen" value="'+esc(K.place)+'">'+(placeOpts.length ? '<datalist id="c-places">'+placeOpts.map(n => '<option value="'+esc(n)+'">').join("")+'</datalist>' : '')+'</div>'
    + '<div class="p-grid"><div class="field"><label class="label" for="c-price">Price (optional)</label><input id="c-price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="e.g. 12.50" value="'+esc(K.price)+'"></div>'
    + '<div class="field"><label class="label" for="c-cur">Currency</label><select id="c-cur">'+curOptions(K.country, K.cur).map(cc => '<option value="'+cc+'"'+(cc === K.cur ? ' selected' : '')+'>'+cc+'</option>').join("")+'</select></div></div>'
+   + '<p class="hint fx c-fx" id="c-fx" data-fx-a="'+esc(K.price)+'" data-fx-c="'+esc(K.cur)+'" data-fx-d="'+esc(K.date)+'" hidden></p>'
    + '<div class="field"><span class="label">Your ratings (optional)</span><div class="rate-rows">'
    + CRITERIA.filter(([k]) => k !== "value" || hasPrice()).map(([k, label]) => '<div class="rate-row"><span class="rl" id="rl-'+k+'">'+esc(label)+'</span><div class="stars-in" role="radiogroup" aria-labelledby="rl-'+k+'">'
        + [1,2,3,4,5].map(n => '<button type="button" role="radio" aria-checked="'+(K.ratings[k] === n)+'" aria-label="'+esc(label)+': '+n+' star'+(n > 1 ? 's' : '')+'" data-act="rate" data-id="'+k+':'+n+'" class="'+(n <= K.ratings[k] ? 'on' : '')+'">★</button>').join("")
@@ -3401,9 +3481,9 @@ document.addEventListener("change", async e => {
     catch(err){ photoError(err); }
   }
   else if (t.id === "c-country"){ K.country = t.value; K.dish = ""; if (!K.curManual) K.cur = CUR[K.country] || "EUR"; renderComposer(); }
-  else if (t.id === "c-cur"){ K.cur = t.value; K.curManual = true; }
+  else if (t.id === "c-cur"){ K.cur = t.value; K.curManual = true; fxComposer(); }
   else if (t.id === "c-dish"){ K.dish = t.value; renderComposer(); }
-  else if (t.id === "c-date"){ K.date = t.value; }
+  else if (t.id === "c-date"){ K.date = t.value; fxComposer(); }
 });
 document.addEventListener("input", e => {
   const t = e.target;
@@ -3413,7 +3493,7 @@ document.addEventListener("input", e => {
   else if (t.id === "c-caption") K.caption = t.value;
   else if (t.id === "c-place") K.place = t.value;
   else if (t.id === "crop-z" && curPic() && curPic().src){ curPic().crop.z = +t.value; drawCrop(); }
-  else if (t.id === "c-price"){ const had = hasPrice(); K.price = t.value; if (had !== hasPrice()){ renderComposer(); const el = $("#c-price"); if (el) el.focus(); } }
+  else if (t.id === "c-price"){ const had = hasPrice(); K.price = t.value; if (had !== hasPrice()){ renderComposer(); const el = $("#c-price"); if (el) el.focus(); } fxComposer(); }
   else if (t.id === "c-other"){ K.custom = t.value; $("#c-post").disabled = !(K.pics.length && K.country && K.custom.trim()); }
 });
 document.addEventListener("submit", e => { if (e.target && e.target.id === "auth-form"){ e.preventDefault(); if (!authBusy) submitAuth(); } });
@@ -3437,6 +3517,10 @@ document.addEventListener("scroll", e => {
   car.querySelectorAll(".car-dots i").forEach((d, k) => d.classList.toggle("on", k === i));
   const pv = car.querySelector(".car-arr.prev"), nx = car.querySelector(".car-arr.next"); if (pv) pv.hidden = i === 0; if (nx) nx.hidden = i === n - 1;
 }, true);
+const _renderFx = render;
+render = function(){ const r = _renderFx.apply(this, arguments); fxFill(); return r; };
+const _openSheetFx = openSheet;
+openSheet = function(){ const r = _openSheetFx.apply(this, arguments); fxFill(); return r; };
 const _renderCar = render;
 render = function(){
   const pos = {}; document.querySelectorAll("#view .car-track[data-mid]").forEach(t => { if (t.scrollLeft) pos[t.dataset.mid] = t.scrollLeft; });
