@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=4"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=5"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -748,6 +748,12 @@ html.sw-on #app{position:relative;z-index:2;background:var(--bg);min-height:100v
 .notif-row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notif .btn.sm{align-self:flex-start}
 .lang-seg{grid-template-columns:repeat(3,1fr);margin-top:4px}
+.av-zoom-b{display:block;border-radius:50%;cursor:zoom-in}
+.avz{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(10,14,12,0);backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0);transition:background .22s ease,backdrop-filter .22s ease;cursor:zoom-out}
+.avz.on{background:rgba(10,14,12,.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.avz img{width:min(78vw,320px);aspect-ratio:1;border-radius:50%;object-fit:cover;box-shadow:0 18px 50px rgba(0,0,0,.45);transition:transform .26s cubic-bezier(.2,.8,.2,1)}
+.avz b{color:#fff;font-size:20px;font-weight:700;opacity:0;transition:opacity .2s ease .08s}
+.avz.on b{opacity:1}
 .av-crop{aspect-ratio:1/1;max-width:min(100%,320px)}
 .av-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(10,14,12,.5);pointer-events:none}
 .av-crop .crop-hint{bottom:10px}
@@ -2170,7 +2176,7 @@ back = function(){
 };
 
 /* ---- the phone's Back button / gesture ---- */
-function swCanBack(){ return !!document.getElementById("wrap") || swSheetOpen() || (stack.length > 1 && !!me); }
+function swCanBack(){ return !!document.getElementById("avz") || !!document.getElementById("wrap") || swSheetOpen() || (stack.length > 1 && !!me); }
 function syncHist(){
   try {
     const on = !!(history.state && history.state.opp);
@@ -2184,7 +2190,8 @@ function syncHist(){
 try { if (history.state && history.state.opp) history.replaceState(null, ""); } catch(e) {}
 window.addEventListener("popstate", () => {
   if (swPopIgnore){ swPopIgnore--; syncHist(); return; }
-  if (document.getElementById("wrap")) closeWrap();
+  if (document.getElementById("avz")) closeAvatarZoom();
+  else if (document.getElementById("wrap")) closeWrap();
   else if (swSheetOpen()) closeSheet();
   else if (stack.length > 1) back();
   syncHist();
@@ -2517,6 +2524,32 @@ async function loadImg(file){
 const photoError = err => toast(err && err.message === "heic-lib" ? "The HEIC converter couldn't load. Try again, or export the photo as a JPG." : "That photo couldn't be read. Try a JPG, PNG or HEIC.");
 function drawTo(img, max){ const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)); const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth*s); cv.height = Math.round(img.naturalHeight*s); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); return cv; }
 /* profile photos: square-cropped, small, stored with the person (no location data survives the re-encode) */
+/* ---------- Seeing someone's profile picture properly: tap it on their passport (like Instagram) ---------- */
+function openAvatarZoom(uid){
+  const src = PEOPLE[uid] && PEOPLE[uid].photo; if (!ownUrl(src) || document.getElementById("avz")) return;
+  const from = document.querySelector('[data-act="av-zoom"][data-id="'+CSS.escape(uid)+'"] img');
+  const el = document.createElement("div"); el.id = "avz"; el.className = "avz"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", nameOf(uid));
+  el.innerHTML = '<img src="'+esc(src)+'" alt=""><b>'+esc(nameOf(uid))+'</b>';
+  document.body.appendChild(el);
+  /* grow out of the small picture */
+  const big = el.querySelector("img");
+  if (from && !matchMedia("(prefers-reduced-motion: reduce)").matches){
+    const a = from.getBoundingClientRect(), z = big.getBoundingClientRect();
+    big.style.transform = "translate(" + (a.left + a.width / 2 - z.left - z.width / 2) + "px," + (a.top + a.height / 2 - z.top - z.height / 2) + "px) scale(" + (a.width / z.width) + ")";
+    big.getBoundingClientRect();
+  }
+  requestAnimationFrame(() => { el.classList.add("on"); big.style.transform = ""; });
+  syncHist();
+}
+function closeAvatarZoom(){
+  const el = document.getElementById("avz"); if (!el) return;
+  el.id = ""; el.classList.remove("on"); setTimeout(() => el.remove(), 220); syncHist();
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest('[data-act="av-zoom"]'); if (b){ e.preventDefault(); openAvatarZoom(b.dataset.id); return; }
+  if (e.target.closest && e.target.closest(".avz")) closeAvatarZoom();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && document.getElementById("avz")) closeAvatarZoom(); });
 /* ---------- Profile picture framing: a circle you drag, pinch or zoom, like framing a meal photo ---------- */
 let AV = null;
 async function openAvatarCrop(file){
@@ -3096,7 +3129,7 @@ function viewStamps(uid){
 }
 function viewUser(uid){
   const isMe = uid === me, st = statsFor(uid), ms = mealsOf(uid);
-  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : avatar(uid, "lg"))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
+  let h = '<div class="stack">' + (isMe ? statusLine() : '') + '<div class="p-head">'+(isMe && canWrite() ? '<label class="pp" for="pp-file" title="Change profile picture">'+avatar(uid, "lg")+'<span class="cam">'+I.camera+'</span></label><input id="pp-file" class="vh" type="file" accept="image/*,.heic,.heif">' : (ownUrl(PEOPLE[uid] && PEOPLE[uid].photo) ? '<button class="av-zoom-b" data-act="av-zoom" data-id="'+esc(uid)+'" aria-label="Show profile picture">'+avatar(uid, "lg")+'</button>' : avatar(uid, "lg")))+'<div style="flex:1;min-width:0"><h2>'+esc(nameOf(uid))+'</h2>'+(isMe ? '<small>'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Your name' : 'No name set yet')+(canWrite() && mode === "shared" && !editingNick ? ' · <a href="#" data-act="edit-nick">'+(PEOPLE[uid] && PEOPLE[uid].nick ? 'Change' : 'Set your name')+'</a>' : '')+'</small>'
      + (canWrite() ? '<small style="display:block"><label class="link" for="pp-file">'+(PEOPLE[uid] && PEOPLE[uid].photo ? 'Change photo' : 'Add a profile photo')+'</label>'+(PEOPLE[uid] && PEOPLE[uid].photo ? ' · <a href="#" data-act="pp-remove">Remove</a>' : '')+'</small>' : '') : '')+'</div></div>';
   h = h.replace(/<\/div><\/div>$/, '</div>'+stampsBadge(uid)+'</div>');   /* stamps sit to the right of the name */
   if (isMe && canWrite() && mode === "shared" && editingNick) h += '<div class="inline-form"><div class="field"><label class="label" for="nick">Your name</label><input id="nick" type="text" maxlength="30" placeholder="What friends call you" value="'+esc((PEOPLE[me] && PEOPLE[me].nick) || "")+'"></div><button class="btn primary" data-act="save-nick">Save</button><button class="btn" data-act="cancel-nick">Cancel</button></div>';
