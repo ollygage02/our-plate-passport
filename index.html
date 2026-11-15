@@ -3855,7 +3855,9 @@ const NP_GO = 74, NP_HOLD = 52;
    every 75ms (measured frame by frame from a screen recording). Everything we move after letting go uses that same
    curve, so it moves as one with the phone. */
 const NP_TAU = 108;
-const NP_CURVE = CSS.supports && CSS.supports("transition-timing-function", "linear(0, 1)") ? "linear(0, 0.2598, 0.4523, 0.5949, 0.7005, 0.7788, 0.8368, 0.8797, 0.9115, 0.9351, 0.9526, 0.9655, 0.9751, 0.9822, 0.9875, 0.9913, 0.9942, 0.9964, 0.998, 0.9991, 1)" : "cubic-bezier(.17,.84,.32,1)";
+/* A standard curve shaped like that spring (matches it within a third of a percent). A custom-shaped curve would be
+   closer still, but the iPhone can't hand those to its smooth graphics engine, so they only update every other frame. */
+const NP_CURVE = "cubic-bezier(.16,.96,.38,1)";
 let NP = null, npRaf = 0, npGen = 0;
 function npStretch(x){ const D = window.innerHeight || 800; return (1 - 1 / (x * 0.55 / D + 1)) * D; }
 /* how far the page is stretched down right now */
@@ -3878,6 +3880,7 @@ function npHide(){
   if (npRaf){ cancelAnimationFrame(npRaf); npRaf = 0; }
   NP = null; if (ptrBusy) return;
   const el = ptrEl(); el.style.transition = "none"; el.style.opacity = 0; el.style.transform = ""; el.classList.remove("ready");
+  const v = $("#view"); if (v && !v.style.transform) npLayers(false);
 }
 /* once per screen frame while the finger is down, and while the page springs back */
 function npTick(){
@@ -3893,23 +3896,37 @@ function npTick(){
    spinner at the top above it. The phone springs the page back towards the top; at the same moment we ease the page
    down by NP_HOLD on the same curve (a touch quicker), so the two add up to one smooth settle that stops at NP_HOLD
    and never dips past it. When it's loaded, the page glides back up and the spinner shrinks away. */
-function npMove(t, ms, curve){
+function npMove(t, ms, curve, late){
   [$("#view"), $("#bar")].forEach(e => { if (!e) return;
-    e.style.transition = ms ? "transform " + ms + "ms " + curve : "none";
+    e.style.transition = ms ? "transform " + ms + "ms " + curve + (late ? " -" + late + "ms" : "") : "none";
     e.style.transform = t > 0.05 ? "translate3d(0," + t + "px,0)" : ""; });
 }
-async function npRun(p0){
+function npLayers(on){ [$("#view"), $("#bar")].forEach(e => e && (e.style.willChange = on ? "transform" : "")); }
+/* the photos now on screen, decoded and ready, so nothing has to be drawn while the page is moving */
+function npPhotosReady(){
+  const imgs = [...document.querySelectorAll("#view img")].filter(im => { const r = im.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+  return Promise.race([Promise.all(imgs.map(im => im.decode ? im.decode().catch(() => {}) : 0)), new Promise(r => setTimeout(r, 400))]);
+}
+async function npRun(p0, upAt){
   ptrBusy = true; const gen = ++npGen, t0 = Date.now(), el = ptrEl();
   if (npRaf){ cancelAnimationFrame(npRaf); npRaf = 0; }
+  const late = Math.round(Math.min(120, Math.max(0, performance.now() - (upAt || performance.now())) + 8));
   el.classList.remove("ready"); el.classList.add("busy");
-  el.style.transition = "transform " + Math.round(NP_TAU * 6) + "ms " + NP_CURVE + ", opacity 120ms ease";
+  el.style.transition = "transform " + Math.round(NP_TAU * 6) + "ms " + NP_CURVE + " -" + late + "ms, opacity 120ms ease";
   el.style.transform = "translate3d(0," + (NP_HOLD / 2 - 18) + "px,0)"; el.style.opacity = 1;
-  [$("#view"), $("#bar")].forEach(e => e && (e.style.willChange = "transform"));
-  npMove(NP_HOLD, 600, NP_CURVE);
+  npLayers(true);
+  npMove(NP_HOLD, 600, NP_CURVE, late);
+  /* start scrolling while it loads: let go of the hold straight away, so nothing shows above the top bar */
+  let held = true;
+  const onScroll = () => { if (held && window.scrollY > 2){ held = false; npMove(0, 260, PTR_EASE);
+    el.style.transition = "transform 200ms ease, opacity 160ms ease"; el.style.transform = "translate3d(0,-18px,0) scale(.4)"; el.style.opacity = 0; } };
+  window.addEventListener("scroll", onScroll, {passive:true});
   await new Promise(r => setTimeout(r, 480));   /* let it settle first: redrawing the page mid-move makes it stutter */
   await ptrFetch(t0);
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));   /* new photos drawn before moving */
-  npMove(0, 380, PTR_EASE);
+  await npPhotosReady();
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  window.removeEventListener("scroll", onScroll);
+  npMove(0, held ? 380 : 0, PTR_EASE);
   el.style.transition = "transform 380ms " + PTR_EASE + ", opacity 220ms ease";
   el.style.transform = "translate3d(0," + (-18) + "px,0) scale(.4)"; el.style.opacity = 0;
   ptrBusy = false; NP = null;   /* free to pull again straight away */
@@ -3930,12 +3947,12 @@ if (PTR_NATIVE){
     if (!NP) return;
     if (e.touches.length !== 1){ npHide(); return; }
     NP.dy = e.touches[0].clientY - NP.y0;
-    if (!ptrBusy && !(SW && SW.dir)){ NP.p = npPull(); npPaint(NP.p); }
+    if (!ptrBusy && !(SW && SW.dir)){ NP.p = npPull(); npPaint(NP.p); if (NP.p > 20 && !NP.layers){ NP.layers = true; npLayers(true); } }
   }, {passive:true});
   document.addEventListener("touchend", e => {
     if (!NP || e.touches.length || !NP.down) return;
     const p = npPull(); NP.down = false; NP.up0 = p; NP.upAt = performance.now(); NP.p = p;
-    if (p >= NP_GO && !ptrBusy) npRun(p);
+    if (p >= NP_GO && !ptrBusy) npRun(p, e.timeStamp);
     else if (!npRaf) npRaf = requestAnimationFrame(npTick);
   }, {passive:true});
   document.addEventListener("touchcancel", () => { if (NP) npHide(); }, {passive:true});
