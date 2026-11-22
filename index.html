@@ -30,7 +30,7 @@
   if (!l){ var n = String(navigator.language || "").toLowerCase(); l = n.indexOf("zh") === 0 ? "zh" : n.indexOf("es") === 0 ? "es" : "en"; }
   if (l !== "zh" && l !== "es") l = "en";
   document.documentElement.lang = l === "zh" ? "zh-Hans" : l;
-  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=10"><\/script>');
+  if (l !== "en") document.write('<script src="/i18n/' + l + '.js?v=11"><\/script>');
 })();
 </script>
 <meta name="description" content="Must-try dishes around the world, and your group's meal photos.">
@@ -296,6 +296,9 @@ p{margin:0}
 .chip input:checked + span{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .chip input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
 .hint{font-size:12.5px;color:var(--muted)}
+.c-taken{margin-top:-6px}
+.c-taken svg{width:15px;height:15px;vertical-align:-3px;margin-right:5px}
+.c-taken b{color:var(--fg);font-weight:600}
 .radios{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--r-md);overflow:hidden}
 .radios label{display:flex;gap:10px;align-items:center;padding:13px 14px;border-top:1px solid var(--line);cursor:pointer}
 .radios label:first-child{border-top:0}
@@ -2167,7 +2170,7 @@ function wrapCard(uid){
 async function usePhotoFile(file){
   if (!K) openComposer(""); if (!K) return;
   K.busy = true; K.pasteAsk = false; renderComposer();
-  try { const {img} = await loadImg(file); if (K.pics.length < MAX_PICS){ addPic(img); K.sel = K.pics.length - 1; } } catch(err) { photoError(err); }
+  try { const [{img}, taken] = await Promise.all([loadImg(file), photoTaken(file)]); if (K.pics.length < MAX_PICS){ addPic(img, taken); K.sel = K.pics.length - 1; syncPhotoDate(); } } catch(err) { photoError(err); }
   K.busy = false; renderComposer();
 }
 async function pastePhoto(){
@@ -2586,6 +2589,44 @@ async function loadImg(file){
     if (Array.isArray(out)) out = out[0];
     return await loadImgRaw(out);
   }
+}
+/* When a photo was taken, from the details the camera saves inside it (EXIF "date taken"). Works for JPEG and HEIC:
+   both keep those details in the same format, after the marker "Exif". It's the camera's local time, so it's the date
+   where the meal was. Nothing is sent anywhere; photos that don't carry it (screenshots, some messaging apps) just
+   show nothing. */
+async function photoTaken(file){
+  try {
+    const find = async (len) => {
+      const b = new Uint8Array(await file.slice(0, len).arrayBuffer());
+      for (let i = 0; i + 14 < b.length; i++){
+        if (b[i] !== 0x45 || b[i+1] !== 0x78 || b[i+2] !== 0x69 || b[i+3] !== 0x66 || b[i+4] || b[i+5]) continue;
+        const t = i + 6, ii = b[t] === 0x49 && b[t+1] === 0x49 && b[t+2] === 42, mm = b[t] === 0x4D && b[t+1] === 0x4D && b[t+3] === 42;
+        if (ii || mm){ const r = exifDate(b, t, ii); if (r) return r; }
+      }
+      return null;
+    };
+    return (await find(512 * 1024)) || (file.size > 512 * 1024 ? await find(Math.min(file.size, 24 * 1024 * 1024)) : null);
+  } catch(e) { return null; }
+}
+function exifDate(b, t, le){
+  const u16 = o => t + o + 2 <= b.length ? (le ? b[t+o] | b[t+o+1] << 8 : b[t+o] << 8 | b[t+o+1]) : -1;
+  const u32 = o => t + o + 4 <= b.length ? (le ? (b[t+o] | b[t+o+1] << 8 | b[t+o+2] << 16) + b[t+o+3] * 16777216 : b[t+o] * 16777216 + (b[t+o+1] << 16 | b[t+o+2] << 8 | b[t+o+3])) : -1;
+  const ifd = (o, want) => {
+    const out = {}, n = u16(o); if (n < 0 || n > 500) return out;
+    for (let k = 0; k < n; k++){
+      const e = o + 2 + k * 12, tag = u16(e), type = u16(e + 2), cnt = u32(e + 4);
+      if (!want.includes(tag)) continue;
+      if (type === 2 && cnt >= 19 && cnt < 64){ const at = t + u32(e + 8); if (at > t && at + 19 <= b.length) out[tag] = String.fromCharCode.apply(null, b.subarray(at, at + 19)); }
+      else if (type === 4 || type === 13) out[tag] = u32(e + 8);
+    }
+    return out;
+  };
+  const d0 = ifd(u32(4), [0x0132, 0x8769]), ex = d0[0x8769] > 0 ? ifd(d0[0x8769], [0x9003, 0x9004]) : {};
+  for (const v of [ex[0x9003], ex[0x9004], d0[0x0132]]){
+    const m = v && v.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})/);
+    if (m && +m[1] > 1990 && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) return {date:m[1] + "-" + m[2] + "-" + m[3], time:m[4] + ":" + m[5]};
+  }
+  return null;
 }
 const photoError = err => toast(err && err.message === "heic-lib" ? "The HEIC converter couldn't load. Try again, or export the photo as a JPG." : "That photo couldn't be read. Try a JPG, PNG or HEIC.");
 function drawTo(img, max){ const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)); const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth*s); cv.height = Math.round(img.naturalHeight*s); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); return cv; }
@@ -3450,6 +3491,7 @@ function renderComposer(){
    + composerPhotosHTML()
    + '<div class="p-grid"><div class="field"><label class="label" for="c-country">Country</label><select id="c-country"><option value="">Choose a country</option>'+COUNTRIES.map(x => '<option value="'+x.code+'"'+(x.code === K.country ? ' selected' : '')+'>'+x.flag+' '+esc(x.name)+'</option>').join("")+'</select></div>'
    + '<div class="field"><label class="label" for="c-date">Date</label><input id="c-date" type="date" value="'+esc(K.date)+'" max="'+todayISO()+'"></div></div>'
+   + photoDateHTML()
    + (c ? '<div class="field"><label class="label" for="c-dish">Dish</label><select id="c-dish"><option value="">Choose a dish</option>'+c.dishes.map(x => '<option value="'+x.id+'"'+(x.id === K.dish ? ' selected' : '')+'>'+x.emoji+' '+esc(x.name)+'</option>').join("")+'<option value="__other"'+(K.dish === "__other" ? ' selected' : '')+'>Not on the list…</option></select></div>' : '')
    + (K.dish === "__other" ? '<div class="field"><label class="label" for="c-other">What did you eat?</label><input id="c-other" type="text" maxlength="60" placeholder="e.g. Mettbrötchen" value="'+esc(K.custom)+'"></div>' : '')
    + '<div class="field"><label class="label" for="c-place">Where? (optional)</label><input id="c-place" type="text" maxlength="80" list="c-places" placeholder="Restaurant, market stall, someone\'s kitchen" value="'+esc(K.place)+'">'+(placeOpts.length ? '<datalist id="c-places">'+placeOpts.map(n => '<option value="'+esc(n)+'">').join("")+'</datalist>' : '')+'</div>'
@@ -3488,9 +3530,24 @@ function composerPhotosHTML(){
   return h;
 }
 /* ---------- Photo framing: portrait 3:4 or landscape 4:3 (the two iPhone shapes), defaulting to the photo's own shape so it fits whole ---------- */
-function addPic(img){
+function addPic(img, taken){
   if (K.frame == null) K.frame = img.naturalHeight > img.naturalWidth ? 3 / 4 : 4 / 3;   /* the first photo sets the shape */
-  K.pics.push({key:newId(), src:img, url:img.src, crop:{z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}});
+  K.pics.push({key:newId(), src:img, url:img.src, crop:{z:1, cx:img.naturalWidth / 2, cy:img.naturalHeight / 2}, taken:taken || null});
+}
+/* the earliest "date taken" among the photos (the meal comes before any second helpings) */
+function photoDate(){
+  const ds = (K && K.pics || []).map(p => p.taken).filter(x => x && x.date <= todayISO());
+  return ds.length ? ds.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))[0] : null;
+}
+/* a new meal whose date hasn't been touched takes the date from its photos */
+function syncPhotoDate(){
+  if (!K || K.editId || K.dateTouched) return;
+  const pd = photoDate(); K.date = pd ? pd.date : todayISO(); K.dateAuto = !!pd;
+}
+function photoDateHTML(){
+  const pd = photoDate(); if (!pd) return '';
+  return '<p class="hint c-taken">'+I.camera+'<span>Photo taken</span> <b>'+fmtDate(pd.date)+'</b>, '+pd.time
+    + (pd.date === K.date ? (K.dateAuto ? ' · <span>Date set from your photo</span>' : '') : ' · <a href="#" data-act="use-photo-date">Use this date</a>')+'</p>';
 }
 function cropRect(p){
   p = p || curPic();
@@ -3528,9 +3585,10 @@ async function addFiles(files){
   if (!list.length) return;
   K.busy = true; renderComposer();
   const first = K.pics.length;
-  for (const f of list){ try { const {img} = await loadImg(f); addPic(img); } catch(err) { photoError(err); } }
+  for (const f of list){ try { const [{img}, taken] = await Promise.all([loadImg(f), photoTaken(f)]); addPic(img, taken); } catch(err) { photoError(err); } }
   if (K.pics.length > first) K.sel = first;
-  K.busy = false; renderComposer();
+  syncPhotoDate();
+  K.busy = false; renderComposer(); fxComposer();
 }
 function setupCrop(){
   const cv = $("#crop-cv"); if (!cv) return;
@@ -4061,7 +4119,8 @@ document.addEventListener("click", e => {
     case "del": { const m = findMeal(id); closeSheet(); if (m){ deleteMeal(m); toast("Meal deleted."); } break; }
     case "log": openComposer(id || (cur().v === "dish" ? cur().id : "")); break;
     case "pic-sel": if (K && K.pics[+id]){ K.sel = +id; renderComposer(); } break;
-    case "pic-del": if (K && K.pics[+id]){ K.pics.splice(+id, 1); if (!K.pics.length && !K.editId) K.frame = null; K.sel = Math.min(K.sel, Math.max(0, K.pics.length - 1)); renderComposer(); } break;
+    case "pic-del": if (K && K.pics[+id]){ K.pics.splice(+id, 1); if (!K.pics.length && !K.editId) K.frame = null; K.sel = Math.min(K.sel, Math.max(0, K.pics.length - 1)); syncPhotoDate(); renderComposer(); fxComposer(); } break;
+    case "use-photo-date": { const pd = K && photoDate(); if (pd){ K.date = pd.date; K.dateTouched = true; K.dateAuto = false; renderComposer(); fxComposer(); } break; }
     case "pic-cover": if (K && K.sel > 0){ const [p] = K.pics.splice(K.sel, 1); K.pics.unshift(p); K.sel = 0; renderComposer(); } break;
     case "car": { const tr = t.closest(".car") && t.closest(".car").querySelector(".car-track"); if (tr) tr.scrollBy({left:(+id) * tr.clientWidth, behavior:"smooth"}); break; }
     case "frame": if (K && K.pics.length){
@@ -4087,7 +4146,7 @@ document.addEventListener("change", async e => {
   else if (t.id === "c-country"){ K.country = t.value; K.dish = ""; if (!K.curManual) K.cur = CUR[K.country] || "EUR"; renderComposer(); }
   else if (t.id === "c-cur"){ K.cur = t.value; K.curManual = true; fxComposer(); }
   else if (t.id === "c-dish"){ K.dish = t.value; renderComposer(); }
-  else if (t.id === "c-date"){ K.date = t.value; fxComposer(); }
+  else if (t.id === "c-date"){ K.date = t.value; K.dateTouched = true; K.dateAuto = false; fxComposer(); const h = $(".c-taken"); if (h){ const x = document.createElement("div"); x.innerHTML = photoDateHTML(); h.replaceWith(x.firstChild || document.createTextNode("")); } }
 });
 document.addEventListener("input", e => {
   const t = e.target;
